@@ -170,10 +170,10 @@ object ConnectiveRepository {
     )
 
     val messages = mutableStateListOf(
-        ChatMessage(1, "Sunrise Media", "Hi Brian, thank you for applying for the position.", false, "10:30 AM"),
-        ChatMessage(2, "Brian Moyo", "Thank you! I'm very excited about the opportunity.", true, "10:32 AM"),
+        ChatMessage(1, "Sunrise Media", "Hi, thank you for applying for the position.", false, "10:30 AM"),
+        ChatMessage(2, "Applicant", "Thank you! I'm very excited about the opportunity.", true, "10:32 AM"),
         ChatMessage(3, "Sunrise Media", "Would you be available for an interview this week?", false, "10:35 AM"),
-        ChatMessage(4, "Brian Moyo", "Yes, I'm available. Please let me know the best time.", true, "10:36 AM")
+        ChatMessage(4, "Applicant", "Yes, I'm available. Please let me know the best time.", true, "10:36 AM")
     )
 
     fun initialize(context: Context) {
@@ -433,14 +433,41 @@ object ConnectiveRepository {
         }
     }
 
-    fun sendMessage(text: String) {
+    fun sendMessage(text: String, isMine: Boolean = true, senderOverride: String? = null) {
         if (text.isBlank()) return
-        val sender = currentUser?.name ?: "Me"
+        val sender = senderOverride ?: if (isMine) (currentUser?.name ?: "Me") else "HR Support"
         val newMsg = ChatMessage(
             id = (messages.maxOfOrNull { it.id } ?: 0) + 1,
             senderName = sender,
             text = text.trim(),
-            mine = true
+            mine = isMine,
+            timestamp = "Just now"
+        )
+        messages.add(newMsg)
+        dbHelper?.saveMessage(newMsg)
+    }
+
+    fun triggerConditionResponse(user: User?) {
+        val userName = user?.name ?: "User"
+        val userApp = applications.find { it.candidateEmail.equals(user?.email, ignoreCase = true) }
+        val company = userApp?.company ?: "Sunrise Media"
+        val jobTitle = userApp?.jobTitle ?: "your job application"
+        val status = userApp?.status ?: "Applied"
+
+        val responseText = when (status) {
+            "Shortlisted" -> "Hello $userName! Your application for $jobTitle at $company is SHORTLISTED. We will contact you soon for an interview."
+            "Hired" -> "Congratulations $userName! You have been HIRED for $jobTitle at $company. Welcome to the team!"
+            "Rejected" -> "Hello $userName, thank you for following up regarding $jobTitle at $company. Our HR team has noted your update."
+            "Applied" -> "Hello $userName! We received your message regarding $jobTitle at $company. Our hiring team is reviewing your qualifications and attachments."
+            else -> "Hello $userName! Thank you for contacting Connective HR Support. How can we help you today?"
+        }
+
+        val newMsg = ChatMessage(
+            id = (messages.maxOfOrNull { it.id } ?: 0) + 1,
+            senderName = "$company HR",
+            text = responseText,
+            mine = false,
+            timestamp = "Just now"
         )
         messages.add(newMsg)
         dbHelper?.saveMessage(newMsg)

@@ -6,17 +6,22 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.connective.data.ConnectiveRepository
@@ -65,28 +70,81 @@ fun HomeScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Centered Top Hover Bar Banner: "Qualified candidates get hired faster"
         item {
-            Row(
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(4.dp)
             ) {
-                Column {
-                    Text("Connective", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = BluePrimary)
-                    Text("Jobs matched by qualification", fontSize = 13.sp, color = TextGray)
-                }
-                if (!isLoggedIn) {
-                    Button(
-                        onClick = onSignInClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = BluePrimary),
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    BluePrimary,
+                                    Color(0xFF3F51B5),
+                                    Color(0xFF00ACC1)
+                                )
+                            )
+                        )
+                        .padding(horizontal = 20.dp, vertical = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Text("Sign In", fontSize = 13.sp, color = Color.White)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(Color.White.copy(alpha = 0.22f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Work,
+                                    contentDescription = "Connective",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = "Qualified Candidates Get Hired Faster",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 18.sp,
+                                color = Color.White,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = if (isLoggedIn) "Jobs matched to your degree & experience" else "Sign in or create account to apply with your qualifications",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.9f),
+                            textAlign = TextAlign.Center
+                        )
+                        if (!isLoggedIn) {
+                            Spacer(Modifier.height(10.dp))
+                            Button(
+                                onClick = onSignInClick,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.25f)),
+                                shape = RoundedCornerShape(20.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                Text("Sign In", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
         }
+
         item {
             OutlinedTextField(
                 value = searchQuery,
@@ -109,6 +167,7 @@ fun HomeScreen(
                 shape = RoundedCornerShape(12.dp)
             )
         }
+
         item {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -121,10 +180,12 @@ fun HomeScreen(
                 ) {
                     filters.take(3).forEach { f ->
                         val selected = f == selectedFilter
+                        val activeGradient = Brush.horizontalGradient(listOf(BluePrimary, Color(0xFF00ACC1)))
                         Box(
                             Modifier
                                 .padding(horizontal = 3.dp)
-                                .background(if (selected) BluePrimary else LightBlueBg, RoundedCornerShape(20.dp))
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (selected) activeGradient else Brush.linearGradient(listOf(LightBlueBg, LightBlueBg)))
                                 .clickable {
                                     if (f == "My Qualification" && !isLoggedIn) {
                                         Toast.makeText(context, "Please sign in to filter by your qualification", Toast.LENGTH_SHORT).show()
@@ -135,7 +196,7 @@ fun HomeScreen(
                                 }
                                 .padding(horizontal = 12.dp, vertical = 7.dp)
                         ) {
-                            Text(f, color = if (selected) Color.White else BluePrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text(f, color = if (selected) Color.White else BluePrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -147,43 +208,22 @@ fun HomeScreen(
                 ) {
                     filters.drop(3).forEach { f ->
                         val selected = f == selectedFilter
+                        val activeGradient = Brush.horizontalGradient(listOf(BluePrimary, Color(0xFF00ACC1)))
                         Box(
                             Modifier
                                 .padding(horizontal = 3.dp)
-                                .background(if (selected) BluePrimary else LightBlueBg, RoundedCornerShape(20.dp))
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (selected) activeGradient else Brush.linearGradient(listOf(LightBlueBg, LightBlueBg)))
                                 .clickable { selectedFilter = f }
                                 .padding(horizontal = 12.dp, vertical = 7.dp)
                         ) {
-                            Text(f, color = if (selected) Color.White else BluePrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text(f, color = if (selected) Color.White else BluePrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
         }
-        item {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .background(HeroBannerGradient, RoundedCornerShape(16.dp))
-                    .padding(18.dp)
-                    .then(if (!isLoggedIn) Modifier.clickable { onSignInClick() } else Modifier)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Qualified candidates get\nhired faster",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        if (isLoggedIn) "Filter jobs matching your degree & experience" else "Sign in or Create Account to apply with your qualifications →",
-                        color = Color.White.copy(alpha = 0.95f),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
+
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
@@ -194,6 +234,7 @@ fun HomeScreen(
                 )
             }
         }
+
         items(filteredJobs) { job ->
             JobCard(
                 job = job,

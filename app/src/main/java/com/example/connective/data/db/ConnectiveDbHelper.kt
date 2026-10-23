@@ -124,8 +124,8 @@ class ConnectiveDbHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         insertApplicationRaw(db, JobApplication(3, 2, "Marketing Officer", "Sunrise Media", "Grace Chisomo", "grace@example.com", "+265 993 445 566", "Blantyre", "Diploma", 2, "Digital Marketing, SEO", "Creative digital marketer.", listOf("Marketing_Diploma.pdf"), "4 days ago", "Shortlisted"))
 
         // Initial Messages
-        insertMessageRaw(db, ChatMessage(1, "Sunrise Media", "Hi Brian, thank you for applying for the position.", false, "10:30 AM"))
-        insertMessageRaw(db, ChatMessage(2, "Brian Moyo", "Thank you! I'm very excited about the opportunity.", true, "10:32 AM"))
+        insertMessageRaw(db, ChatMessage(1, "Sunrise Media", "Hi, thank you for applying for the position.", false, "10:30 AM"))
+        insertMessageRaw(db, ChatMessage(2, "Applicant", "Thank you! I'm very excited about the opportunity.", true, "10:32 AM"))
     }
 
     private fun insertUserRaw(db: SQLiteDatabase, user: User) {
