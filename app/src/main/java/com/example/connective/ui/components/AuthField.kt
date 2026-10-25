@@ -35,10 +35,14 @@ fun AuthField(
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
-        placeholder = { Text(hint, fontSize = 13.sp) },
+        placeholder = { Text(hint, fontSize = 13.sp, color = TextGray) },
         colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = TextDark,
+            unfocusedTextColor = TextDark,
             focusedContainerColor = Color.White,
-            unfocusedContainerColor = Color.White
+            unfocusedContainerColor = Color.White,
+            focusedBorderColor = BluePrimary,
+            unfocusedBorderColor = Color(0xFFD0D7DE)
         ),
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,

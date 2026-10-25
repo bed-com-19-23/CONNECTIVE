@@ -121,8 +121,12 @@ fun ProfileSetupScreen(onCompleted: () -> Unit) {
                         onValueChange = { bio = it },
                         placeholder = { Text("Brief introduction about your experience and career goals...", fontSize = 13.sp) },
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextDark,
+                            unfocusedTextColor = TextDark,
                             focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
+                            unfocusedContainerColor = Color.White,
+                            focusedBorderColor = BluePrimary,
+                            unfocusedBorderColor = Color(0xFFD0D7DE)
                         ),
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,

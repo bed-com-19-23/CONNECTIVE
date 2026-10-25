@@ -225,6 +225,8 @@ fun MessagesScreen() {
                     placeholder = { Text("Type a message...", fontSize = 13.sp) },
                     modifier = Modifier.weight(1f),
                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextDark,
+                        unfocusedTextColor = TextDark,
                         focusedBorderColor = Color.Transparent,
                         unfocusedBorderColor = Color.Transparent
                     ),

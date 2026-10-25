@@ -159,8 +159,12 @@ fun HomeScreen(
                     }
                 },
                 colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = TextDark,
+                    unfocusedTextColor = TextDark,
                     focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White
+                    unfocusedContainerColor = Color.White,
+                    focusedBorderColor = BluePrimary,
+                    unfocusedBorderColor = Color(0xFFD0D7DE)
                 ),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,

@@ -5,14 +5,21 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.connective.data.ConnectiveRepository
@@ -33,13 +40,82 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
     val educationLevels = listOf("Master's Degree", "Bachelor's Degree", "Diploma", "Certificate", "Secondary School")
     val experienceOptions = listOf(0, 1, 2, 3, 5)
 
+    val activeJobs = ConnectiveRepository.jobs
+
     Column(
-        Modifier.fillMaxSize().background(BackgroundLight)
-            .verticalScroll(rememberScrollState()).padding(16.dp)
+        Modifier
+            .fillMaxSize()
+            .background(BackgroundLight)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
     ) {
-        Text("Employer Dashboard", color = TextGray, fontSize = 13.sp)
-        Text("Post a New Job", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = TextDark)
-        Spacer(Modifier.height(14.dp))
+        // Centered Top Hover Bar Banner for Admin Job Control
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            shape = RoundedCornerShape(20.dp),
+            elevation = CardDefaults.cardElevation(4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                BluePrimary,
+                                Color(0xFF3F51B5),
+                                Color(0xFF00ACC1)
+                            )
+                        )
+                    )
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(Color.White.copy(alpha = 0.22f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Work,
+                                contentDescription = "Admin Job Control",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = "Admin Job Control & Posting",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 20.sp,
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Create, publish, and manage active job listings (${activeJobs.size} Active)",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.9f),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        // Job Posting Form Card
+        Text("Publish New Opportunity", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextDark)
+        Spacer(Modifier.height(10.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -48,8 +124,8 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
             elevation = CardDefaults.cardElevation(2.dp)
         ) {
             Column(Modifier.padding(16.dp)) {
-                Field("Job Title", title, "e.g. Marketing Officer") { title = it }
-                Field("Company Name", company, "e.g. Sunrise Media") { company = it }
+                Field("Job Title", title, "e.g. Software Developer") { title = it }
+                Field("Company Name", company, "e.g. TechWave Ltd") { company = it }
 
                 Text("Job Type", fontWeight = FontWeight.Medium, color = TextDark, fontSize = 14.sp)
                 Spacer(Modifier.height(6.dp))
@@ -108,9 +184,9 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
                 }
                 Spacer(Modifier.height(12.dp))
 
-                Field("Location", location, "e.g. Blantyre, Malawi") { location = it }
-                Field("Salary (Optional)", salary, "e.g. MWK 400,000 – 700,000") { salary = it }
-                Field("Job Description", description, "Describe the role, responsibilities and requirements...", minLines = 4) { description = it }
+                Field("Location", location, "e.g. Lilongwe, Malawi") { location = it }
+                Field("Salary Range", salary, "e.g. MWK 600,000 – 1,000,000") { salary = it }
+                Field("Job Description", description, "Describe the role, responsibilities and requirements...", minLines = 3) { description = it }
 
                 Button(
                     onClick = {
@@ -132,9 +208,65 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
                             onJobPosted()
                         }
                     },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(10.dp)
-                ) { Text("Post Job") }
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Post Job", fontWeight = FontWeight.Bold) }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Manage Existing Jobs Section
+        Text("Manage Published Jobs", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextDark)
+        Spacer(Modifier.height(10.dp))
+
+        if (activeJobs.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                Text(
+                    "No active job postings.",
+                    modifier = Modifier.padding(16.dp),
+                    color = TextGray,
+                    fontSize = 13.sp
+                )
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                activeJobs.forEach { job ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(job.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextDark)
+                                Text("${job.company} • ${job.location}", fontSize = 12.sp, color = TextGray)
+                                Text("Min: ${job.minEducation} | ${job.minExperienceYears} yr(s)+", fontSize = 11.sp, color = BluePrimary)
+                            }
+                            IconButton(onClick = {
+                                ConnectiveRepository.deleteJob(job.id)
+                                Toast.makeText(context, "Job posting removed", Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete Job",
+                                    tint = Color.Red
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -155,8 +287,12 @@ private fun Field(
         onValueChange = onChange,
         placeholder = { Text(hint, fontSize = 13.sp) },
         colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = TextDark,
+            unfocusedTextColor = TextDark,
             focusedContainerColor = Color.White,
-            unfocusedContainerColor = Color.White
+            unfocusedContainerColor = Color.White,
+            focusedBorderColor = BluePrimary,
+            unfocusedBorderColor = Color(0xFFD0D7DE)
         ),
         modifier = Modifier.fillMaxWidth(),
         minLines = minLines,

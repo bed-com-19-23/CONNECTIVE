@@ -349,8 +349,12 @@ private fun JobApplicationFormScreen(
                         onValueChange = { name = it },
                         label = { Text("Full Name") },
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextDark,
+                            unfocusedTextColor = TextDark,
                             focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
+                            unfocusedContainerColor = Color.White,
+                            focusedBorderColor = BluePrimary,
+                            unfocusedBorderColor = Color(0xFFD0D7DE)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -359,8 +363,12 @@ private fun JobApplicationFormScreen(
                         onValueChange = { email = it },
                         label = { Text("Email Address") },
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextDark,
+                            unfocusedTextColor = TextDark,
                             focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
+                            unfocusedContainerColor = Color.White,
+                            focusedBorderColor = BluePrimary,
+                            unfocusedBorderColor = Color(0xFFD0D7DE)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -369,8 +377,12 @@ private fun JobApplicationFormScreen(
                         onValueChange = { phone = it },
                         label = { Text("Phone Number") },
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextDark,
+                            unfocusedTextColor = TextDark,
                             focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
+                            unfocusedContainerColor = Color.White,
+                            focusedBorderColor = BluePrimary,
+                            unfocusedBorderColor = Color(0xFFD0D7DE)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -379,8 +391,12 @@ private fun JobApplicationFormScreen(
                         onValueChange = { location = it },
                         label = { Text("Current Location / City") },
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextDark,
+                            unfocusedTextColor = TextDark,
                             focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
+                            unfocusedContainerColor = Color.White,
+                            focusedBorderColor = BluePrimary,
+                            unfocusedBorderColor = Color(0xFFD0D7DE)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -439,8 +455,12 @@ private fun JobApplicationFormScreen(
                         label = { Text("Key Skills & Certifications") },
                         placeholder = { Text("e.g. Kotlin, REST APIs, Git") },
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextDark,
+                            unfocusedTextColor = TextDark,
                             focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
+                            unfocusedContainerColor = Color.White,
+                            focusedBorderColor = BluePrimary,
+                            unfocusedBorderColor = Color(0xFFD0D7DE)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -450,8 +470,12 @@ private fun JobApplicationFormScreen(
                         onValueChange = { coverNote = it },
                         label = { Text("Cover Statement / Additional Details") },
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextDark,
+                            unfocusedTextColor = TextDark,
                             focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White
+                            unfocusedContainerColor = Color.White,
+                            focusedBorderColor = BluePrimary,
+                            unfocusedBorderColor = Color(0xFFD0D7DE)
                         ),
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3

@@ -358,6 +358,11 @@ object ConnectiveRepository {
         return job
     }
 
+    fun deleteJob(jobId: Int) {
+        jobs.removeAll { it.id == jobId }
+        dbHelper?.deleteJob(jobId)
+    }
+
     fun toggleSaveJob(jobId: Int) {
         val index = jobs.indexOfFirst { it.id == jobId }
         if (index != -1) {
