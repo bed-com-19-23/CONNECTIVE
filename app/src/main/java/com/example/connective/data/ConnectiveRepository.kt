@@ -292,6 +292,7 @@ object ConnectiveRepository {
 
     fun updateUserProfileDetails(
         name: String,
+        email: String = currentUser?.email ?: "",
         phone: String,
         location: String,
         title: String,
@@ -307,8 +308,11 @@ object ConnectiveRepository {
             .joinToString("")
             .ifEmpty { "US" }
 
+        val newEmail = email.ifBlank { user.email }
+
         val updatedUser = user.copy(
             name = name.ifBlank { user.name },
+            email = newEmail,
             phone = phone.ifBlank { user.phone },
             location = location.ifBlank { user.location },
             title = title.ifBlank { user.title },
@@ -320,8 +324,9 @@ object ConnectiveRepository {
         )
 
         currentUser = updatedUser
+        sessionManager?.savedUserEmail = newEmail
 
-        val index = registeredUsers.indexOfFirst { it.id == user.id || it.email == user.email }
+        val index = registeredUsers.indexOfFirst { it.id == user.id || it.email.equals(user.email, ignoreCase = true) }
         if (index != -1) {
             registeredUsers[index] = updatedUser
         } else {

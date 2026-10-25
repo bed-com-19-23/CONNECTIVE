@@ -462,6 +462,7 @@ fun ProfileScreen(
                         Button(onClick = {
                             ConnectiveRepository.updateUserProfileDetails(
                                 name = pName,
+                                email = pEmail,
                                 phone = pPhone,
                                 location = pLocation,
                                 title = user.title,
