@@ -118,6 +118,40 @@ class HomeScreenTest {
     }
 
     @Test
+    fun testPreventDuplicateApplication() {
+        val email = "unique.applicant@example.com"
+        val jobId = 1
+        ConnectiveRepository.applyForJobWithQualification(
+            jobId = jobId,
+            name = "Unique Applicant",
+            email = email,
+            phone = "+265 999 111 222",
+            location = "Lilongwe",
+            educationLevel = "Bachelor's Degree",
+            experienceYears = 3,
+            skills = "Kotlin",
+            coverNote = "First application."
+        )
+
+        // Try applying again for same job
+        val duplicateResult = ConnectiveRepository.applyForJobWithQualification(
+            jobId = jobId,
+            name = "Unique Applicant",
+            email = email,
+            phone = "+265 999 111 222",
+            location = "Lilongwe",
+            educationLevel = "Bachelor's Degree",
+            experienceYears = 3,
+            skills = "Kotlin",
+            coverNote = "Second application."
+        )
+
+        assertTrue("Duplicate application should be blocked", duplicateResult is QualificationResult.Ineligible)
+        val reason = (duplicateResult as QualificationResult.Ineligible).reason
+        assertTrue(reason.contains("already applied", ignoreCase = true))
+    }
+
+    @Test
     fun testToggleSaveJobBookmark() {
         val jobId = 1
         val initialStatus = ConnectiveRepository.jobs.find { it.id == jobId }?.isSaved ?: false
@@ -146,6 +180,22 @@ class HomeScreenTest {
     }
 
     @Test
+    fun testDeleteJobPostingByAdmin() {
+        val newJob = ConnectiveRepository.addJob(
+            title = "Temporary Position",
+            company = "Test Co",
+            location = "Mzuzu",
+            type = "Contract",
+            salary = "MWK 300,000"
+        )
+        val initialCount = ConnectiveRepository.jobs.size
+        ConnectiveRepository.deleteJob(newJob.id)
+
+        assertEquals("Jobs count should decrease by 1 after deletion", initialCount - 1, ConnectiveRepository.jobs.size)
+        assertFalse("Deleted job should no longer exist in jobs list", ConnectiveRepository.jobs.any { it.id == newJob.id })
+    }
+
+    @Test
     fun testUpdateApplicationStatusByEmployer() {
         val appId = 1
         ConnectiveRepository.updateApplicationStatus(appId, "Shortlisted")
@@ -153,5 +203,17 @@ class HomeScreenTest {
 
         assertNotNull("Application should exist", updatedApp)
         assertEquals("Shortlisted", updatedApp?.status)
+    }
+
+    @Test
+    fun testTriggerConditionResponsePersonalizedGreeting() {
+        val user = ConnectiveRepository.loginUser("shepherd@example.com", "Shepherd Sadick")
+        val initialMsgCount = ConnectiveRepository.messages.size
+
+        ConnectiveRepository.triggerConditionResponse(user)
+
+        assertEquals("Messages count should increase by 1 after trigger", initialMsgCount + 1, ConnectiveRepository.messages.size)
+        val latestMsg = ConnectiveRepository.messages.last()
+        assertTrue("Triggered response should address user by name", latestMsg.text.contains("Shepherd Sadick", ignoreCase = true))
     }
 }
