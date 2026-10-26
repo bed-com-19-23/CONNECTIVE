@@ -36,7 +36,7 @@ fun ProfileScreen(
     val user = ConnectiveRepository.currentUser
 
     var isEditing by remember { mutableStateOf(false) }
-    var activeDialog by remember { mutableStateOf<String?>(null) } // "personal", "education", "work", "preferences"
+    var activeDialog by remember { mutableStateOf<String?>(null) } // "personal", "education", "work", "preferences", "admin_users"
     var activeStatDialog by remember { mutableStateOf<String?>(null) } // "Applied", "Shortlisted", "Hired", "Saved"
 
     var editTitle by remember { mutableStateOf(user?.title ?: "") }
@@ -130,7 +130,7 @@ fun ProfileScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(user.name, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextDark)
                 Text(
-                    if (user.role == "employer") user.companyName.ifBlank { "Employer" } else user.title,
+                    if (user.role == "employer" || user.role == "admin") user.companyName.ifBlank { "System Administrator" } else user.title,
                     color = BluePrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
@@ -233,7 +233,7 @@ fun ProfileScreen(
 
                 Spacer(Modifier.height(16.dp))
                 val userApps = ConnectiveRepository.applications.filter { app ->
-                    user.role == "employer" || app.candidateEmail.equals(user.email, ignoreCase = true)
+                    user.role == "employer" || user.role == "admin" || app.candidateEmail.equals(user.email, ignoreCase = true)
                 }
                 val appliedCount = userApps.count { it.status.equals("Applied", ignoreCase = true) }
                 val shortlistedCount = userApps.count { it.status.equals("Shortlisted", ignoreCase = true) }
@@ -281,6 +281,12 @@ fun ProfileScreen(
                         MenuRow(Icons.Default.Settings, "Preferences") {
                             activeDialog = "preferences"
                         }
+                        if (user.role == "admin" || user.role == "employer") {
+                            HorizontalDivider(color = LightBlueBg)
+                            MenuRow(Icons.Default.SupervisorAccount, "Admin User Management") {
+                                activeDialog = "admin_users"
+                            }
+                        }
                     }
                 }
 
@@ -302,7 +308,7 @@ fun ProfileScreen(
         if (activeStatDialog != null) {
             val dialogCategory = activeStatDialog!!
             val userApps = ConnectiveRepository.applications.filter { app ->
-                user.role == "employer" || app.candidateEmail.equals(user.email, ignoreCase = true)
+                user.role == "employer" || user.role == "admin" || app.candidateEmail.equals(user.email, ignoreCase = true)
             }
             val savedJobsCount = ConnectiveRepository.jobs.count { it.isSaved }
 
@@ -421,6 +427,68 @@ fun ProfileScreen(
 
         // Dialogs for Menu Items
         when (activeDialog) {
+            "admin_users" -> {
+                val registeredUsers = ConnectiveRepository.registeredUsers
+
+                AlertDialog(
+                    onDismissRequest = { activeDialog = null },
+                    title = {
+                        Text(
+                            text = "Admin User Management (${registeredUsers.size})",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = TextNavy
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 350.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            registeredUsers.forEach { u ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = CardDefaults.cardColors(containerColor = BackgroundLight)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(u.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextDark)
+                                            Text("Email: ${u.email}", fontSize = 11.sp, color = TextGray)
+                                            Text("Role: ${u.role.uppercase()} • ${u.title}", fontSize = 11.sp, color = BluePrimary)
+                                        }
+                                        if (u.id != user.id) {
+                                            IconButton(onClick = {
+                                                ConnectiveRepository.deleteUser(u.id)
+                                                Toast.makeText(context, "User ${u.name} removed", Toast.LENGTH_SHORT).show()
+                                            }) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Delete User",
+                                                    tint = Color.Red
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = { activeDialog = null }) { Text("Close") }
+                    }
+                )
+            }
+
             "personal" -> {
                 var pName by remember { mutableStateOf(user.name) }
                 var pPhone by remember { mutableStateOf(user.phone) }
@@ -436,24 +504,56 @@ fun ProfileScreen(
                                 value = pName,
                                 onValueChange = { pName = it },
                                 label = { Text("Full Name") },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextDark,
+                                    unfocusedTextColor = TextDark,
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedBorderColor = BluePrimary,
+                                    unfocusedBorderColor = Color(0xFFD0D7DE)
+                                ),
                                 modifier = Modifier.fillMaxWidth()
                             )
                             OutlinedTextField(
                                 value = pPhone,
                                 onValueChange = { pPhone = it },
                                 label = { Text("Phone Number") },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextDark,
+                                    unfocusedTextColor = TextDark,
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedBorderColor = BluePrimary,
+                                    unfocusedBorderColor = Color(0xFFD0D7DE)
+                                ),
                                 modifier = Modifier.fillMaxWidth()
                             )
                             OutlinedTextField(
                                 value = pEmail,
                                 onValueChange = { pEmail = it },
                                 label = { Text("Email Address") },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextDark,
+                                    unfocusedTextColor = TextDark,
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedBorderColor = BluePrimary,
+                                    unfocusedBorderColor = Color(0xFFD0D7DE)
+                                ),
                                 modifier = Modifier.fillMaxWidth()
                             )
                             OutlinedTextField(
                                 value = pLocation,
                                 onValueChange = { pLocation = it },
                                 label = { Text("Location") },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextDark,
+                                    unfocusedTextColor = TextDark,
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedBorderColor = BluePrimary,
+                                    unfocusedBorderColor = Color(0xFFD0D7DE)
+                                ),
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -512,6 +612,14 @@ fun ProfileScreen(
                                 onValueChange = { userSkills = it },
                                 label = { Text("Key Skills & Certifications") },
                                 placeholder = { Text("e.g. Kotlin, REST APIs, Git") },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextDark,
+                                    unfocusedTextColor = TextDark,
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedBorderColor = BluePrimary,
+                                    unfocusedBorderColor = Color(0xFFD0D7DE)
+                                ),
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -553,6 +661,14 @@ fun ProfileScreen(
                                 value = workTitle,
                                 onValueChange = { workTitle = it },
                                 label = { Text("Current or Preferred Job Title") },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextDark,
+                                    unfocusedTextColor = TextDark,
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedBorderColor = BluePrimary,
+                                    unfocusedBorderColor = Color(0xFFD0D7DE)
+                                ),
                                 modifier = Modifier.fillMaxWidth()
                             )
 
@@ -573,6 +689,14 @@ fun ProfileScreen(
                                 value = userBio,
                                 onValueChange = { userBio = it },
                                 label = { Text("Career Summary / Bio") },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextDark,
+                                    unfocusedTextColor = TextDark,
+                                    focusedContainerColor = Color.White,
+                                    unfocusedContainerColor = Color.White,
+                                    focusedBorderColor = BluePrimary,
+                                    unfocusedBorderColor = Color(0xFFD0D7DE)
+                                ),
                                 modifier = Modifier.fillMaxWidth(),
                                 minLines = 3
                             )

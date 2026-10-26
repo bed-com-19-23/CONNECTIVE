@@ -336,6 +336,11 @@ object ConnectiveRepository {
         dbHelper?.saveUser(updatedUser)
     }
 
+    fun deleteUser(userId: Int) {
+        registeredUsers.removeAll { it.id == userId }
+        dbHelper?.deleteUser(userId)
+    }
+
     fun addJob(
         title: String,
         company: String,

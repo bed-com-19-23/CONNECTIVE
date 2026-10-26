@@ -230,6 +230,11 @@ class ConnectiveDbHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         insertUserRaw(db, user)
     }
 
+    fun deleteUser(userId: Int) {
+        val db = writableDatabase
+        db.delete(TABLE_USERS, "id = ?", arrayOf(userId.toString()))
+    }
+
     fun getAllJobs(): List<Job> {
         val list = mutableListOf<Job>()
         val db = readableDatabase
