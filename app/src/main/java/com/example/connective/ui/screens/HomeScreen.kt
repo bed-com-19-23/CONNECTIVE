@@ -5,11 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.*
@@ -24,46 +26,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.connective.data.ConnectiveRepository
+import com.example.connective.data.User
 import com.example.connective.ui.components.JobCard
 import com.example.connective.ui.theme.*
+import com.example.connective.viewmodel.HomeViewModel
 
 @Composable
 fun HomeScreen(
-    isLoggedIn: Boolean = false,
+    currentUser: User?,
+    unreadNotifCount: Int = 0,
+    onNotificationsClick: () -> Unit = {},
     onSignInClick: () -> Unit = {},
-    onJobClick: (Int) -> Unit
+    onJobClick: (String) -> Unit,
+    viewModel: HomeViewModel
 ) {
     val context = LocalContext.current
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf("All") }
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val selectedCategory by viewModel.selectedCategory.collectAsState()
+    val selectedFilter by viewModel.selectedFilter.collectAsState()
+    val filteredJobs by viewModel.filteredJobs.collectAsState()
+    val savedJobIds by viewModel.savedJobIds.collectAsState()
+
+    val categories = listOf("All", "IT", "Finance", "Marketing", "Design", "Healthcare", "Education", "Engineering", "Other")
     val filters = listOf("All", "My Qualification", "Bachelor's", "Diploma", "Certificate", "Full-time")
-
-    val currentUser = ConnectiveRepository.currentUser
-
-    val filteredJobs = ConnectiveRepository.jobs.filter { job ->
-        val matchesQuery = job.title.contains(searchQuery, ignoreCase = true) ||
-                job.company.contains(searchQuery, ignoreCase = true) ||
-                job.location.contains(searchQuery, ignoreCase = true)
-
-        val matchesFilter = when (selectedFilter) {
-            "All" -> true
-            "My Qualification" -> {
-                if (currentUser != null) {
-                    val userRank = ConnectiveRepository.getEducationRank(currentUser.educationLevel)
-                    val jobRank = ConnectiveRepository.getEducationRank(job.minEducation)
-                    userRank >= jobRank
-                } else true
-            }
-            "Bachelor's" -> job.minEducation.contains("Bachelor", ignoreCase = true)
-            "Diploma" -> job.minEducation.contains("Diploma", ignoreCase = true)
-            "Certificate" -> job.minEducation.contains("Certificate", ignoreCase = true)
-            "Full-time" -> job.type.equals("Full-time", ignoreCase = true)
-            else -> true
-        }
-
-        matchesQuery && matchesFilter
-    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(BackgroundLight),
@@ -89,16 +74,17 @@ fun HomeScreen(
                                 )
                             )
                         )
-                        .padding(horizontal = 20.dp, vertical = 20.dp),
-                    contentAlignment = Alignment.Center
+                        .padding(horizontal = 20.dp, vertical = 20.dp)
                 ) {
                     Column(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
@@ -113,23 +99,44 @@ fun HomeScreen(
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
-                            Spacer(Modifier.width(10.dp))
+
                             Text(
                                 text = "Qualified Candidates Get Hired Faster",
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 18.sp,
+                                fontSize = 16.sp,
                                 color = Color.White,
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                             )
+
+                            // Bell Icon with Unread Badge
+                            Box {
+                                IconButton(onClick = onNotificationsClick) {
+                                    Icon(
+                                        imageVector = Icons.Default.Notifications,
+                                        contentDescription = "Notifications",
+                                        tint = Color.White
+                                    )
+                                }
+                                if (unreadNotifCount > 0) {
+                                    Badge(
+                                        modifier = Modifier.align(Alignment.TopEnd)
+                                    ) {
+                                        Text("$unreadNotifCount")
+                                    }
+                                }
+                            }
                         }
+
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = if (isLoggedIn) "Jobs matched to your degree & experience" else "Sign in or create account to apply with your qualifications",
+                            text = if (currentUser != null) "Jobs matched to your degree & experience" else "Sign in or create account to apply with your qualifications",
                             fontSize = 12.sp,
                             color = Color.White.copy(alpha = 0.9f),
                             textAlign = TextAlign.Center
                         )
-                        if (!isLoggedIn) {
+
+                        if (currentUser == null) {
                             Spacer(Modifier.height(10.dp))
                             Button(
                                 onClick = onSignInClick,
@@ -145,15 +152,16 @@ fun HomeScreen(
             }
         }
 
+        // Search Bar
         item {
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { searchQuery = it },
+                onValueChange = { viewModel.updateSearchQuery(it) },
                 placeholder = { Text("Search jobs, qualifications, companies...") },
                 leadingIcon = { Icon(Icons.Default.Search, null, tint = BluePrimary) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
+                        IconButton(onClick = { viewModel.updateSearchQuery("") }) {
                             Icon(Icons.Default.Close, "Clear search")
                         }
                     }
@@ -172,6 +180,33 @@ fun HomeScreen(
             )
         }
 
+        // Category Filter Chips
+        item {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Categories", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextNavy)
+                Spacer(Modifier.height(6.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(categories) { cat ->
+                        val selected = cat == selectedCategory
+                        val activeGradient = Brush.horizontalGradient(listOf(BluePrimary, Color(0xFF00ACC1)))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (selected) activeGradient else Brush.linearGradient(listOf(LightBlueBg, LightBlueBg)))
+                                .clickable { viewModel.updateCategory(cat) }
+                                .padding(horizontal = 14.dp, vertical = 7.dp)
+                        ) {
+                            Text(cat, color = if (selected) Color.White else BluePrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Qualification & Type Filters
         item {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -191,11 +226,11 @@ fun HomeScreen(
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(if (selected) activeGradient else Brush.linearGradient(listOf(LightBlueBg, LightBlueBg)))
                                 .clickable {
-                                    if (f == "My Qualification" && !isLoggedIn) {
+                                    if (f == "My Qualification" && currentUser == null) {
                                         Toast.makeText(context, "Please sign in to filter by your qualification", Toast.LENGTH_SHORT).show()
                                         onSignInClick()
                                     } else {
-                                        selectedFilter = f
+                                        viewModel.updateFilter(f)
                                     }
                                 }
                                 .padding(horizontal = 12.dp, vertical = 7.dp)
@@ -218,7 +253,7 @@ fun HomeScreen(
                                 .padding(horizontal = 3.dp)
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(if (selected) activeGradient else Brush.linearGradient(listOf(LightBlueBg, LightBlueBg)))
-                                .clickable { selectedFilter = f }
+                                .clickable { viewModel.updateFilter(f) }
                                 .padding(horizontal = 12.dp, vertical = 7.dp)
                         ) {
                             Text(f, color = if (selected) Color.White else BluePrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -231,7 +266,9 @@ fun HomeScreen(
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
-                    if (searchQuery.isNotEmpty() || selectedFilter != "All") "Filtered Jobs (${filteredJobs.size})" else "Featured Jobs",
+                    if (searchQuery.isNotEmpty() || selectedFilter != "All" || selectedCategory != "All")
+                        "Filtered Jobs (${filteredJobs.size})"
+                    else "Featured Opportunities (${filteredJobs.size})",
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     color = TextNavy
@@ -239,19 +276,39 @@ fun HomeScreen(
             }
         }
 
-        items(filteredJobs) { job ->
-            JobCard(
-                job = job,
-                onSaveClick = {
-                    if (isLoggedIn) {
-                        ConnectiveRepository.toggleSaveJob(job.id)
-                    } else {
-                        Toast.makeText(context, "Please sign in to save jobs", Toast.LENGTH_SHORT).show()
-                        onSignInClick()
-                    }
-                },
-                onClick = { onJobClick(job.id) }
-            )
+        if (filteredJobs.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Text(
+                        text = "No job opportunities match your search or filter criteria.",
+                        modifier = Modifier.padding(20.dp),
+                        color = TextGray,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            items(filteredJobs, key = { it.id }) { job ->
+                val isSaved = savedJobIds.contains(job.id)
+                JobCard(
+                    job = job,
+                    isSaved = isSaved,
+                    onSaveClick = {
+                        if (currentUser != null) {
+                            viewModel.toggleSaveJob(job.id, currentUser)
+                        } else {
+                            Toast.makeText(context, "Please sign in to save jobs", Toast.LENGTH_SHORT).show()
+                            onSignInClick()
+                        }
+                    },
+                    onClick = { onJobClick(job.id) }
+                )
+            }
         }
     }
 }

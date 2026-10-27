@@ -17,23 +17,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.connective.data.ConnectiveRepository
+import com.example.connective.data.TimeUtils
 import com.example.connective.ui.theme.*
+import com.example.connective.viewmodel.ApplicationsViewModel
 
 @Composable
-fun ApplicationsScreen() {
-    var filter by remember { mutableStateOf("All") }
-    val filters = listOf("All", "Applied", "Shortlisted", "Rejected")
+fun ApplicationsScreen(viewModel: ApplicationsViewModel) {
+    val filter by viewModel.filter.collectAsState()
+    val applications by viewModel.filteredApplications.collectAsState()
 
-    val currentUser = ConnectiveRepository.currentUser
-    val applications = ConnectiveRepository.applications.filter { app ->
-        val matchesUser = currentUser == null || app.candidateEmail == currentUser.email || currentUser.role == "employer"
-        val matchesFilter = filter == "All" || app.status.equals(filter, ignoreCase = true)
-        matchesUser && matchesFilter
-    }
+    val filters = listOf("All", "Applied", "Shortlisted", "Rejected", "Hired")
 
     Column(
         modifier = Modifier
@@ -41,7 +36,7 @@ fun ApplicationsScreen() {
             .background(BackgroundLight)
             .padding(16.dp)
     ) {
-        // Centered Top Hover Bar Banner for Applications with Vibrant Colors
+        // Centered Top Hover Bar Banner for Applications
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -87,25 +82,23 @@ fun ApplicationsScreen() {
                         }
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            text = "Applications",
+                            text = "My Applications",
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 24.sp,
-                            color = Color.White,
-                            textAlign = TextAlign.Center
+                            color = Color.White
                         )
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Track your job applications and status (${applications.size} Total)",
+                        text = "Real-time tracking for your job applications (${applications.size} Listed)",
                         fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.9f),
-                        textAlign = TextAlign.Center
+                        color = Color.White.copy(alpha = 0.9f)
                     )
                 }
             }
         }
 
-        // Filter Bar with Vibrant Gradient Hover Colors
+        // Filter Bar
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
@@ -118,13 +111,13 @@ fun ApplicationsScreen() {
                 )
                 Box(
                     modifier = Modifier
-                        .padding(horizontal = 4.dp)
+                        .padding(horizontal = 3.dp)
                         .clip(RoundedCornerShape(20.dp))
                         .background(
                             if (selected) activeGradient else Brush.linearGradient(listOf(LightBlueBg, LightBlueBg))
                         )
-                        .clickable { filter = f }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .clickable { viewModel.setFilter(f) }
+                        .padding(horizontal = 12.dp, vertical = 7.dp)
                 ) {
                     Text(
                         text = f,
@@ -144,7 +137,7 @@ fun ApplicationsScreen() {
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(applications) { app ->
+                items(applications, key = { it.id }) { app ->
                     Card(
                         Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
@@ -168,7 +161,7 @@ fun ApplicationsScreen() {
                             Column(Modifier.weight(1f)) {
                                 Text(app.jobTitle, fontWeight = FontWeight.Bold, color = TextDark)
                                 Text(app.company, color = TextGray, fontSize = 12.sp)
-                                Text("Applied: ${app.appliedDate}", color = TextGray, fontSize = 11.sp)
+                                Text("Applied: ${TimeUtils.formatRelativeTime(app.createdAt)}", color = TextGray, fontSize = 11.sp)
                             }
                             val statusColor = when (app.status) {
                                 "Shortlisted" -> Color(0xFF2E9E5B)

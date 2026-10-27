@@ -1,5 +1,6 @@
 package com.example.connective.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,26 +13,45 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.connective.data.ConnectiveRepository
 import com.example.connective.ui.components.AuthField
 import com.example.connective.ui.theme.*
+import com.example.connective.viewmodel.AuthViewModel
+import com.example.connective.viewmodel.UiState
 
 @Composable
-fun RegisterScreen(onRegistered: (String) -> Unit, onLogin: () -> Unit, onBack: () -> Unit) {
+fun RegisterScreen(
+    onRegistered: (String) -> Unit,
+    onLogin: () -> Unit,
+    onBack: () -> Unit,
+    viewModel: AuthViewModel
+) {
+    val context = LocalContext.current
+
     var role by remember { mutableStateOf("seeker") }
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
 
-    var nameError by remember { mutableStateOf<String?>(null) }
-    var emailError by remember { mutableStateOf<String?>(null) }
-    var passwordError by remember { mutableStateOf<String?>(null) }
-    var confirmError by remember { mutableStateOf<String?>(null) }
+    val registerState by viewModel.registerState.collectAsState()
+
+    LaunchedEffect(registerState) {
+        when (val state = registerState) {
+            is UiState.Success -> {
+                viewModel.resetState()
+                onRegistered(state.data.role)
+            }
+            is UiState.Error -> {
+                Toast.makeText(context, state.message, Toast.LENGTH_LONG).show()
+            }
+            else -> {}
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(BackgroundLight)) {
         IconButton(onClick = onBack, modifier = Modifier.padding(8.dp)) {
@@ -72,45 +92,65 @@ fun RegisterScreen(onRegistered: (String) -> Unit, onLogin: () -> Unit, onBack: 
                     Spacer(Modifier.height(16.dp))
 
                     AuthField(
-                        if (role == "employer") "Company Name" else "Full Name",
-                        name, { name = it; nameError = null },
-                        if (role == "employer") "e.g. Sunrise Media" else "e.g. Shepherd Sadick",
-                        error = nameError
+                        label = if (role == "employer") "Company Name" else "Full Name",
+                        value = name,
+                        onChange = { name = it },
+                        hint = if (role == "employer") "e.g. Sunrise Media" else "e.g. Shepherd Sadick"
                     )
-                    AuthField("Email", email, { email = it; emailError = null },
-                        "you@example.com", KeyboardType.Email, error = emailError)
-                    AuthField("Password", password, { password = it; passwordError = null },
-                        "At least 6 characters", isPassword = true, error = passwordError)
-                    AuthField("Confirm Password", confirm, { confirm = it; confirmError = null },
-                        "Repeat your password", isPassword = true, error = confirmError)
+                    AuthField(
+                        label = "Email",
+                        value = email,
+                        onChange = { email = it },
+                        hint = "you@example.com",
+                        keyboardType = KeyboardType.Email
+                    )
+                    AuthField(
+                        label = "Password",
+                        value = password,
+                        onChange = { password = it },
+                        hint = "At least 8 characters",
+                        isPassword = true
+                    )
+                    AuthField(
+                        label = "Confirm Password",
+                        value = confirm,
+                        onChange = { confirm = it },
+                        hint = "Repeat your password",
+                        isPassword = true
+                    )
 
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(12.dp))
                     Button(
                         onClick = {
-                            nameError = if (name.isBlank()) "This field is required" else null
-                            emailError = if (!email.contains("@") || !email.contains(".")) "Enter a valid email" else null
-                            passwordError = if (password.length < 6) "Password must be at least 6 characters" else null
-                            confirmError = if (confirm != password) "Passwords do not match" else null
-                            if (listOf(nameError, emailError, passwordError, confirmError).all { it == null }) {
-                                ConnectiveRepository.registerUser(
-                                    name = name,
-                                    email = email,
-                                    role = role,
-                                    companyName = if (role == "employer") name else ""
-                                )
-                                onRegistered(role)
-                            }
+                            viewModel.register(
+                                name = name,
+                                email = email,
+                                pass = password,
+                                confirmPass = confirm,
+                                role = role,
+                                companyName = if (role == "employer") name else ""
+                            )
                         },
+                        enabled = registerState !is UiState.Loading,
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(10.dp)
-                    ) { Text("Create Account") }
+                    ) {
+                        if (registerState is UiState.Loading) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                        } else {
+                            Text("Create Account", fontWeight = FontWeight.Bold)
+                        }
+                    }
 
                     Spacer(Modifier.height(20.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                         Text("Already have an account? ", color = TextGray, fontSize = 14.sp)
                         Text(
-                            "Log in", color = BluePrimary, fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onLogin() }
+                            "Log in",
+                            color = BluePrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { onLogin() }
                         )
                     }
                 }

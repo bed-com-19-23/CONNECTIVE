@@ -22,6 +22,7 @@ import com.example.connective.ui.theme.*
 @Composable
 fun JobCard(
     job: Job,
+    isSaved: Boolean = false,
     onSaveClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
@@ -42,20 +43,32 @@ fun JobCard(
             Column(Modifier.weight(1f)) {
                 Text(job.title, fontWeight = FontWeight.Bold, color = TextDark)
                 Text(job.company, color = TextGray, fontSize = 13.sp)
-                Spacer(Modifier.height(6.dp))
-                Text("${job.location} · ${job.type}", color = TextGray, fontSize = 12.sp)
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .background(LightBlueBg, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(job.category, fontSize = 10.sp, color = BluePrimary, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text("${job.location} · ${job.type}", color = TextGray, fontSize = 12.sp)
+                }
                 Spacer(Modifier.height(6.dp))
                 Text(job.salary, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextDark)
             }
-            IconButton(
-                onClick = { onSaveClick?.invoke() },
-                modifier = Modifier.size(24.dp)
-            ) {
-                Icon(
-                    imageVector = if (job.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                    contentDescription = "Save job",
-                    tint = if (job.isSaved) BluePrimary else TextGray
-                )
+            if (onSaveClick != null) {
+                IconButton(
+                    onClick = { onSaveClick.invoke() },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = "Save job",
+                        tint = if (isSaved) BluePrimary else TextGray
+                    )
+                }
             }
         }
     }

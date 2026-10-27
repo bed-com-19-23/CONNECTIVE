@@ -1,6 +1,11 @@
 package com.example.connective.ui.screens
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,204 +32,236 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.connective.data.ConnectiveRepository
-import com.example.connective.data.QualificationResult
+import com.example.connective.data.Job
+import com.example.connective.data.User
 import com.example.connective.ui.theme.*
+import com.example.connective.viewmodel.JobDetailsViewModel
+import com.example.connective.viewmodel.UiState
 
 @Composable
 fun JobDetailsScreen(
-    jobId: Int,
-    isLoggedIn: Boolean = false,
+    jobId: String,
+    currentUser: User?,
+    savedJobIds: Set<String> = emptySet(),
+    onToggleSave: (String, Boolean) -> Unit = { _, _ -> },
     onRequireAuth: () -> Unit = {},
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: JobDetailsViewModel
 ) {
     val context = LocalContext.current
-    val job = ConnectiveRepository.jobs.find { it.id == jobId } ?: ConnectiveRepository.jobs.first()
-    val user = ConnectiveRepository.currentUser
+    val jobState by viewModel.jobState.collectAsState()
+    val applicationResult by viewModel.applicationResult.collectAsState()
+    val uploadProgress by viewModel.uploadProgress.collectAsState()
 
     var isApplying by remember { mutableStateOf(false) }
     var ineligibleReason by remember { mutableStateOf<String?>(null) }
     var successMessage by remember { mutableStateOf<String?>(null) }
 
-    if (isApplying && user != null) {
-        JobApplicationFormScreen(
-            jobTitle = job.title,
-            company = job.company,
-            minEducation = job.minEducation,
-            minExperience = job.minExperienceYears,
-            initialName = user.name,
-            initialEmail = user.email,
-            initialPhone = user.phone,
-            initialLocation = user.location,
-            initialEducation = user.educationLevel,
-            initialExperience = user.experienceYears,
-            onBack = { isApplying = false },
-            onSubmit = { name, email, phone, loc, edu, exp, skills, cover, files ->
-                val result = ConnectiveRepository.applyForJobWithQualification(
-                    jobId = job.id,
-                    name = name,
-                    email = email,
-                    phone = phone,
-                    location = loc,
-                    educationLevel = edu,
-                    experienceYears = exp,
-                    skills = skills,
-                    coverNote = cover,
-                    attachments = files
-                )
-                isApplying = false
-                when (result) {
-                    is QualificationResult.Success -> {
-                        successMessage = result.message
-                    }
-                    is QualificationResult.Ineligible -> {
-                        ineligibleReason = result.reason
-                    }
-                    is QualificationResult.Error -> {
-                        Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        )
-    } else {
-        Column(Modifier.fillMaxSize().background(BackgroundLight)) {
-            Row(
-                Modifier.fillMaxWidth().padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextDark)
-                }
-                IconButton(onClick = {
-                    if (isLoggedIn) {
-                        ConnectiveRepository.toggleSaveJob(job.id)
-                        val msg = if (job.isSaved) "Job unsaved" else "Job saved!"
-                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(context, "Please sign in to save jobs", Toast.LENGTH_SHORT).show()
-                        onRequireAuth()
-                    }
-                }) {
-                    Icon(
-                        imageVector = if (job.isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                        contentDescription = "Save",
-                        tint = if (job.isSaved) BluePrimary else TextDark
-                    )
-                }
-            }
+    LaunchedEffect(jobId) {
+        viewModel.loadJob(jobId)
+    }
 
-            Column(
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp)
-            ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(2.dp)
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier.size(56.dp).background(BlueDark, RoundedCornerShape(14.dp)),
-                                contentAlignment = Alignment.Center
-                            ) { Icon(Icons.Default.Code, null, tint = Color.White) }
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(job.title, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextDark)
-                                Text(job.company, color = TextGray)
+    LaunchedEffect(applicationResult) {
+        when (val result = applicationResult) {
+            is UiState.Success -> {
+                isApplying = false
+                successMessage = result.data
+                viewModel.resetApplicationState()
+            }
+            is UiState.Error -> {
+                ineligibleReason = result.message
+                viewModel.resetApplicationState()
+            }
+            else -> {}
+        }
+    }
+
+    when (val state = jobState) {
+        is UiState.Loading -> {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = BluePrimary)
+            }
+        }
+        is UiState.Error -> {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(state.message, color = TextGray, fontSize = 14.sp)
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = onBack) { Text("Go Back") }
+                }
+            }
+        }
+        is UiState.Success -> {
+            val job = state.data
+            val isSaved = savedJobIds.contains(job.id)
+
+            if (isApplying && currentUser != null) {
+                JobApplicationFormScreen(
+                    job = job,
+                    seeker = currentUser,
+                    uploadProgress = uploadProgress,
+                    isSubmitting = applicationResult is UiState.Loading,
+                    onBack = { isApplying = false },
+                    onSubmit = { phone, loc, edu, exp, skills, cover, files ->
+                        viewModel.submitApplication(
+                            job = job,
+                            seeker = currentUser,
+                            phone = phone,
+                            location = loc,
+                            educationLevel = edu,
+                            experienceYears = exp,
+                            skills = skills,
+                            coverNote = cover,
+                            pickedFiles = files
+                        )
+                    }
+                )
+            } else {
+                Column(Modifier.fillMaxSize().background(BackgroundLight)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextDark)
+                        }
+                        IconButton(onClick = {
+                            if (currentUser != null) {
+                                onToggleSave(job.id, isSaved)
+                            } else {
+                                Toast.makeText(context, "Please sign in to save jobs", Toast.LENGTH_SHORT).show()
+                                onRequireAuth()
+                            }
+                        }) {
+                            Icon(
+                                imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = "Save",
+                                tint = if (isSaved) BluePrimary else TextDark
+                            )
+                        }
+                    }
+
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        Modifier.size(56.dp).background(BlueDark, RoundedCornerShape(14.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) { Icon(Icons.Default.Code, null, tint = Color.White) }
+                                    Spacer(Modifier.width(12.dp))
+                                    Column {
+                                        Text(job.title, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextDark)
+                                        Text(job.company, color = TextGray)
+                                    }
+                                }
+                                Spacer(Modifier.height(16.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.LocationOn, null, tint = TextGray, modifier = Modifier.size(18.dp))
+                                    Text(" ${job.location}", color = TextGray, fontSize = 13.sp)
+                                    Spacer(Modifier.width(16.dp))
+                                    Icon(Icons.Default.School, null, tint = TextGray, modifier = Modifier.size(18.dp))
+                                    Text(" ${job.type}", color = TextGray, fontSize = 13.sp)
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Text("Category: ${job.category}", fontSize = 12.sp, color = BluePrimary, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.height(4.dp))
+                                Text(job.salary, fontWeight = FontWeight.Medium, color = TextDark)
+                            }
+                        }
+
+                        Spacer(Modifier.height(14.dp))
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Column(Modifier.padding(14.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.School, null, tint = BluePrimary, modifier = Modifier.size(20.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Minimum Qualification Criteria", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextDark)
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                Text("• Minimum Education: ${job.minEducation}", fontSize = 13.sp, color = TextDark)
+                                Text("• Required Experience: ${job.minExperienceYears}+ year(s)", fontSize = 13.sp, color = TextDark)
+                            }
+                        }
+
+                        Spacer(Modifier.height(14.dp))
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text("About the job", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextDark)
+                                Spacer(Modifier.height(6.dp))
+                                Text(job.description, color = TextGray, fontSize = 14.sp)
+
+                                if (job.requirements.isNotEmpty()) {
+                                    Spacer(Modifier.height(16.dp))
+                                    Text("Requirements", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextDark)
+                                    Spacer(Modifier.height(6.dp))
+                                    job.requirements.forEach { requirement ->
+                                        Text("•  $requirement", color = TextGray, fontSize = 14.sp, modifier = Modifier.padding(vertical = 2.dp))
+                                    }
+                                }
                             }
                         }
                         Spacer(Modifier.height(16.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocationOn, null, tint = TextGray, modifier = Modifier.size(18.dp))
-                            Text(" ${job.location}", color = TextGray, fontSize = 13.sp)
-                            Spacer(Modifier.width(16.dp))
-                            Icon(Icons.Default.School, null, tint = TextGray, modifier = Modifier.size(18.dp))
-                            Text(" ${job.type}", color = TextGray, fontSize = 13.sp)
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Text(job.salary, fontWeight = FontWeight.Medium, color = TextDark)
                     }
-                }
 
-                Spacer(Modifier.height(14.dp))
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(2.dp)
-                ) {
-                    Column(Modifier.padding(14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.School, null, tint = BluePrimary, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Minimum Qualification Criteria", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextDark)
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text("• Minimum Education: ${job.minEducation}", fontSize = 13.sp, color = TextDark)
-                        Text("• Required Experience: ${job.minExperienceYears}+ year(s)", fontSize = 13.sp, color = TextDark)
-                    }
-                }
-
-                Spacer(Modifier.height(14.dp))
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(2.dp)
-                ) {
                     Column(Modifier.padding(16.dp)) {
-                        Text("About the job", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextDark)
-                        Spacer(Modifier.height(6.dp))
-                        Text(job.description, color = TextGray, fontSize = 14.sp)
-
-                        Spacer(Modifier.height(16.dp))
-                        Text("Requirements", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextDark)
-                        Spacer(Modifier.height(6.dp))
-                        job.requirements.forEach { requirement ->
-                            Text("•  $requirement", color = TextGray, fontSize = 14.sp, modifier = Modifier.padding(vertical = 2.dp))
-                        }
+                        Button(
+                            onClick = {
+                                if (currentUser != null) {
+                                    if (currentUser.role == "seeker") {
+                                        isApplying = true
+                                    } else {
+                                        Toast.makeText(context, "Employers / Admins cannot apply for jobs", Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Please sign in to apply", Toast.LENGTH_SHORT).show()
+                                    onRequireAuth()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) { Text("Apply Now") }
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                if (currentUser != null) {
+                                    onToggleSave(job.id, isSaved)
+                                } else {
+                                    Toast.makeText(context, "Please sign in to save jobs", Toast.LENGTH_SHORT).show()
+                                    onRequireAuth()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) { Text(if (isSaved) "Remove from Saved" else "Save Job") }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            Column(Modifier.padding(16.dp)) {
-                Button(
-                    onClick = {
-                        if (isLoggedIn) {
-                            isApplying = true
-                        } else {
-                            Toast.makeText(context, "Please sign in to apply", Toast.LENGTH_SHORT).show()
-                            onRequireAuth()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(10.dp)
-                ) { Text("Apply Now") }
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = {
-                        if (isLoggedIn) {
-                            ConnectiveRepository.toggleSaveJob(job.id)
-                            val msg = if (job.isSaved) "Job unsaved" else "Job saved!"
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, "Please sign in to save jobs", Toast.LENGTH_SHORT).show()
-                            onRequireAuth()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(10.dp)
-                ) { Text(if (job.isSaved) "Remove from Saved" else "Save Job") }
             }
         }
+        else -> {}
     }
 
     if (ineligibleReason != null) {
@@ -259,44 +296,54 @@ fun JobDetailsScreen(
 
 @Composable
 private fun JobApplicationFormScreen(
-    jobTitle: String,
-    company: String,
-    minEducation: String,
-    minExperience: Int,
-    initialName: String,
-    initialEmail: String,
-    initialPhone: String,
-    initialLocation: String,
-    initialEducation: String,
-    initialExperience: Int,
+    job: Job,
+    seeker: User,
+    uploadProgress: Float,
+    isSubmitting: Boolean,
     onBack: () -> Unit,
     onSubmit: (
-        name: String,
-        email: String,
         phone: String,
         location: String,
         education: String,
         experience: Int,
         skills: String,
         cover: String,
-        attachments: List<String>
+        pickedFiles: List<Pair<Uri, String>>
     ) -> Unit
 ) {
-    var name by remember { mutableStateOf(initialName) }
-    var email by remember { mutableStateOf(initialEmail) }
-    var phone by remember { mutableStateOf(initialPhone) }
-    var location by remember { mutableStateOf(initialLocation) }
-    var education by remember { mutableStateOf(initialEducation) }
-    var experience by remember { mutableIntStateOf(initialExperience) }
-    var skills by remember { mutableStateOf("") }
+    val context = LocalContext.current
+
+    // Pre-fill fields from candidate profile
+    var phone by remember { mutableStateOf(seeker.phone) }
+    var location by remember { mutableStateOf(seeker.location) }
+    var education by remember { mutableStateOf(seeker.educationLevel) }
+    var experience by remember { mutableIntStateOf(seeker.experienceYears) }
+    var skills by remember { mutableStateOf(seeker.skills) }
     var coverNote by remember { mutableStateOf("") }
-    val attachedFiles = remember { mutableStateListOf("Degree_Certificate.pdf", "Passport_Photo.png") }
+
+    val pickedFiles = remember { mutableStateListOf<Pair<Uri, String>>() }
+
+    // Real OpenDocument File Picker (PDF/Image <= 5MB)
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val fileName = getFileNameFromUri(context, uri) ?: "Document_${System.currentTimeMillis()}.pdf"
+            val fileSize = getFileSizeFromUri(context, uri)
+
+            if (fileSize > 5 * 1024 * 1024) { // Max 5 MB
+                Toast.makeText(context, "File size exceeds 5 MB limit ($fileName)", Toast.LENGTH_LONG).show()
+            } else {
+                pickedFiles.add(Pair(uri, fileName))
+                Toast.makeText(context, "Selected: $fileName", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     val educationLevels = listOf("Master's Degree", "Bachelor's Degree", "Diploma", "Certificate", "Secondary School")
     val experienceOptions = listOf(0, 1, 2, 3, 5)
 
     Column(Modifier.fillMaxSize().background(BackgroundLight)) {
-        // Top Bar with Back Button
         Row(
             Modifier
                 .fillMaxWidth()
@@ -310,7 +357,7 @@ private fun JobApplicationFormScreen(
             Spacer(Modifier.width(8.dp))
             Column {
                 Text("Job Application Form", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextDark)
-                Text("$jobTitle · $company", fontSize = 12.sp, color = TextGray)
+                Text("${job.title} · ${job.company}", fontSize = 12.sp, color = TextGray)
             }
         }
 
@@ -330,8 +377,8 @@ private fun JobApplicationFormScreen(
                 Column(Modifier.padding(14.dp)) {
                     Text("Job Qualification Criteria:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextDark)
                     Spacer(Modifier.height(4.dp))
-                    Text("• Minimum Education: $minEducation", fontSize = 12.sp, color = BluePrimary)
-                    Text("• Minimum Experience: $minExperience year(s)", fontSize = 12.sp, color = BluePrimary)
+                    Text("• Minimum Education: ${job.minEducation}", fontSize = 12.sp, color = BluePrimary)
+                    Text("• Minimum Experience: ${job.minExperienceYears} year(s)", fontSize = 12.sp, color = BluePrimary)
                 }
             }
 
@@ -342,33 +389,31 @@ private fun JobApplicationFormScreen(
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("1. Personal & Contact Details", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextDark)
+                    Text("1. Pre-filled Candidate Info", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextDark)
 
                     OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Full Name") },
+                        value = seeker.name,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Full Name (from profile)") },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextDark,
                             unfocusedTextColor = TextDark,
                             focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White,
-                            focusedBorderColor = BluePrimary,
-                            unfocusedBorderColor = Color(0xFFD0D7DE)
+                            unfocusedContainerColor = Color.White
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = { Text("Email Address") },
+                        value = seeker.email,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Email Address (from profile)") },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextDark,
                             unfocusedTextColor = TextDark,
                             focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White,
-                            focusedBorderColor = BluePrimary,
-                            unfocusedBorderColor = Color(0xFFD0D7DE)
+                            unfocusedContainerColor = Color.White
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -389,7 +434,7 @@ private fun JobApplicationFormScreen(
                     OutlinedTextField(
                         value = location,
                         onValueChange = { location = it },
-                        label = { Text("Current Location / City") },
+                        label = { Text("Location / City") },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextDark,
                             unfocusedTextColor = TextDark,
@@ -490,40 +535,24 @@ private fun JobApplicationFormScreen(
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("3. Attach Qualification Documents & Images", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextDark)
-                    Text("Attach copies of your Degree / Diploma certificate, CV, or ID photo for employer verification.", fontSize = 12.sp, color = TextGray)
+                    Text("3. Attach Documents & Certificates (PDF/Image <= 5MB)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextDark)
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
-                            onClick = {
-                                val newDoc = "Qualification_Cert_${attachedFiles.size + 1}.pdf"
-                                if (!attachedFiles.contains(newDoc)) attachedFiles.add(newDoc)
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("+ Attach Document", fontSize = 11.sp)
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                val newImg = "ID_Photo_${attachedFiles.size + 1}.png"
-                                if (!attachedFiles.contains(newImg)) attachedFiles.add(newImg)
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Image, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("+ Attach Image", fontSize = 11.sp)
-                        }
+                    OutlinedButton(
+                        onClick = {
+                            documentPickerLauncher.launch(arrayOf("application/pdf", "image/*"))
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.AttachFile, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("+ Choose Document or Image", fontSize = 13.sp)
                     }
 
-                    if (attachedFiles.isNotEmpty()) {
-                        Text("Attached Files (${attachedFiles.size}):", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextDark)
-                        attachedFiles.forEach { file ->
+                    if (pickedFiles.isNotEmpty()) {
+                        Text("Selected Files (${pickedFiles.size}):", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextDark)
+                        pickedFiles.forEach { pair ->
+                            val fileName = pair.second
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -534,28 +563,36 @@ private fun JobApplicationFormScreen(
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = if (file.endsWith(".png") || file.endsWith(".jpg")) Icons.Default.Image else Icons.Default.AttachFile,
+                                        imageVector = if (fileName.endsWith(".png") || fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) Icons.Default.Image else Icons.Default.AttachFile,
                                         contentDescription = null,
                                         tint = BluePrimary,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(Modifier.width(6.dp))
-                                    Text(file, fontSize = 12.sp, color = TextDark)
+                                    Text(fileName, fontSize = 12.sp, color = TextDark)
                                 }
                                 IconButton(
-                                    onClick = { attachedFiles.remove(file) },
+                                    onClick = { pickedFiles.remove(pair) },
                                     modifier = Modifier.size(20.dp)
                                 ) {
-                                    Icon(Icons.Default.Close, "Remove attachment", tint = TextGray, modifier = Modifier.size(14.dp))
+                                    Icon(Icons.Default.Close, "Remove", tint = TextGray, modifier = Modifier.size(14.dp))
                                 }
                             }
                         }
+                    }
+
+                    if (isSubmitting) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("Uploading attachments... ${(uploadProgress * 100).toInt()}%", fontSize = 12.sp, color = BluePrimary)
+                        LinearProgressIndicator(
+                            progress = { uploadProgress },
+                            modifier = Modifier.fillMaxWidth().height(6.dp)
+                        )
                     }
                 }
             }
         }
 
-        // Bottom Action Buttons: Submit Application & Cancel
         Column(
             Modifier
                 .fillMaxWidth()
@@ -564,20 +601,56 @@ private fun JobApplicationFormScreen(
         ) {
             Button(
                 onClick = {
-                    onSubmit(name, email, phone, location, education, experience, skills, coverNote, attachedFiles)
+                    onSubmit(phone, location, education, experience, skills, coverNote, pickedFiles.toList())
                 },
+                enabled = !isSubmitting,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)
-            ) { Text("Submit Application") }
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Submit Application")
+                }
+            }
 
             Spacer(Modifier.height(8.dp))
 
             OutlinedButton(
                 onClick = onBack,
+                enabled = !isSubmitting,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(10.dp)
             ) { Text("Cancel") }
         }
     }
+}
+
+private fun getFileNameFromUri(context: Context, uri: Uri): String? {
+    var name: String? = null
+    val cursor = context.contentResolver.query(uri, null, null, null, null)
+    cursor?.use { c ->
+        if (c.moveToFirst()) {
+            val nameIndex = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex != -1) {
+                name = c.getString(nameIndex)
+            }
+        }
+    }
+    return name
+}
+
+private fun getFileSizeFromUri(context: Context, uri: Uri): Long {
+    var size: Long = 0
+    val cursor = context.contentResolver.query(uri, null, null, null, null)
+    cursor?.use { c ->
+        if (c.moveToFirst()) {
+            val sizeIndex = c.getColumnIndex(OpenableColumns.SIZE)
+            if (sizeIndex != -1) {
+                size = c.getLong(sizeIndex)
+            }
+        }
+    }
+    return size
 }

@@ -15,23 +15,27 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.connective.data.ConnectiveRepository
+import com.example.connective.data.User
 import com.example.connective.ui.components.AuthField
 import com.example.connective.ui.theme.*
+import com.example.connective.viewmodel.ProfileViewModel
 
 @Composable
-fun ProfileSetupScreen(onCompleted: () -> Unit) {
+fun ProfileSetupScreen(
+    currentUser: User?,
+    onCompleted: () -> Unit,
+    viewModel: ProfileViewModel
+) {
     val context = LocalContext.current
-    val user = ConnectiveRepository.currentUser
 
-    var name by remember { mutableStateOf(user?.name ?: "") }
-    var phone by remember { mutableStateOf(user?.phone ?: "") }
-    var location by remember { mutableStateOf(user?.location ?: "") }
-    var title by remember { mutableStateOf(user?.title ?: "") }
-    var educationLevel by remember { mutableStateOf(user?.educationLevel ?: "Bachelor's Degree") }
-    var experienceYears by remember { mutableIntStateOf(user?.experienceYears ?: 2) }
-    var skills by remember { mutableStateOf(user?.skills ?: "") }
-    var bio by remember { mutableStateOf(user?.bio ?: "") }
+    var name by remember { mutableStateOf(currentUser?.name ?: "") }
+    var phone by remember { mutableStateOf(currentUser?.phone ?: "") }
+    var location by remember { mutableStateOf(currentUser?.location ?: "") }
+    var title by remember { mutableStateOf(currentUser?.title ?: "") }
+    var educationLevel by remember { mutableStateOf(currentUser?.educationLevel ?: "Bachelor's Degree") }
+    var experienceYears by remember { mutableIntStateOf(currentUser?.experienceYears ?: 2) }
+    var skills by remember { mutableStateOf(currentUser?.skills ?: "") }
+    var bio by remember { mutableStateOf(currentUser?.bio ?: "") }
 
     val educationLevels = listOf("Master's Degree", "Bachelor's Degree", "Diploma", "Certificate", "Secondary School")
     val experienceOptions = listOf(0, 1, 2, 3, 5)
@@ -139,23 +143,24 @@ fun ProfileSetupScreen(onCompleted: () -> Unit) {
                             if (name.isBlank() || phone.isBlank() || location.isBlank()) {
                                 Toast.makeText(context, "Please enter your name, phone and location", Toast.LENGTH_SHORT).show()
                             } else {
-                                ConnectiveRepository.updateUserProfileDetails(
-                                    name = name,
-                                    phone = phone,
-                                    location = location,
-                                    title = title,
+                                val updated = (currentUser ?: User()).copy(
+                                    name = name.trim(),
+                                    phone = phone.trim(),
+                                    location = location.trim(),
+                                    title = title.trim(),
                                     educationLevel = educationLevel,
                                     experienceYears = experienceYears,
-                                    skills = skills,
-                                    bio = bio
+                                    skills = skills.trim(),
+                                    bio = bio.trim()
                                 )
+                                viewModel.updateProfile(updated)
                                 Toast.makeText(context, "Profile setup complete!", Toast.LENGTH_SHORT).show()
                                 onCompleted()
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(10.dp)
-                    ) { Text("Save & Continue to Applications") }
+                    ) { Text("Save & Continue") }
                 }
             }
             Spacer(Modifier.height(24.dp))

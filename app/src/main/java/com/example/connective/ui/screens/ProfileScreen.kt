@@ -22,36 +22,42 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.connective.data.ConnectiveRepository
+import com.example.connective.data.Job
+import com.example.connective.data.JobApplication
+import com.example.connective.data.TimeUtils
+import com.example.connective.data.User
 import com.example.connective.ui.theme.*
+import com.example.connective.viewmodel.ProfileViewModel
 
 @Composable
 fun ProfileScreen(
-    isLoggedIn: Boolean = false,
+    currentUser: User?,
+    applications: List<JobApplication> = emptyList(),
+    savedJobs: List<Job> = emptyList(),
     onSignInClick: () -> Unit = {},
     onRegisterClick: () -> Unit = {},
-    onSignOutClick: () -> Unit = {}
+    onSignOutClick: () -> Unit = {},
+    viewModel: ProfileViewModel
 ) {
     val context = LocalContext.current
-    val user = ConnectiveRepository.currentUser
 
     var isEditing by remember { mutableStateOf(false) }
-    var activeDialog by remember { mutableStateOf<String?>(null) } // "personal", "education", "work", "preferences", "admin_users"
+    var activeDialog by remember { mutableStateOf<String?>(null) } // "personal", "education", "work", "preferences"
     var activeStatDialog by remember { mutableStateOf<String?>(null) } // "Applied", "Shortlisted", "Hired", "Saved"
 
-    var editTitle by remember { mutableStateOf(user?.title ?: "") }
-    var editLocation by remember { mutableStateOf(user?.location ?: "") }
-    var editBio by remember { mutableStateOf(user?.bio ?: "") }
+    var editTitle by remember { mutableStateOf(currentUser?.title ?: "") }
+    var editLocation by remember { mutableStateOf(currentUser?.location ?: "") }
+    var editBio by remember { mutableStateOf(currentUser?.bio ?: "") }
 
-    LaunchedEffect(user) {
-        if (user != null) {
-            editTitle = user.title
-            editLocation = user.location
-            editBio = user.bio
+    LaunchedEffect(currentUser) {
+        if (currentUser != null) {
+            editTitle = currentUser.title
+            editLocation = currentUser.location
+            editBio = currentUser.bio
         }
     }
 
-    if (!isLoggedIn || user == null) {
+    if (currentUser == null) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -121,24 +127,26 @@ fun ProfileScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        user.avatarInitials,
+                        currentUser.avatarInitials.ifBlank { currentUser.name.firstOrNull()?.toString() ?: "U" },
                         color = Color.White,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(user.name, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextDark)
+                Text(currentUser.name, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextDark)
                 Text(
-                    if (user.role == "employer" || user.role == "admin") user.companyName.ifBlank { "System Administrator" } else user.title,
+                    if (currentUser.role == "employer") currentUser.companyName.ifBlank { "Employer" }
+                    else if (currentUser.role == "admin") "System Administrator"
+                    else currentUser.title,
                     color = BluePrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 )
-                Text(user.location, color = TextGray, fontSize = 13.sp)
+                Text(currentUser.location, color = TextGray, fontSize = 13.sp)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    user.bio,
+                    currentUser.bio,
                     color = TextGray,
                     fontSize = 13.sp,
                     textAlign = TextAlign.Center
@@ -213,16 +221,12 @@ fun ProfileScreen(
                             ) {
                                 TextButton(onClick = { isEditing = false }) { Text("Cancel") }
                                 Button(onClick = {
-                                    ConnectiveRepository.updateUserProfileDetails(
-                                        name = user.name,
-                                        phone = user.phone,
-                                        location = editLocation,
-                                        title = editTitle,
-                                        educationLevel = user.educationLevel,
-                                        experienceYears = user.experienceYears,
-                                        skills = user.skills,
-                                        bio = editBio
+                                    val updated = currentUser.copy(
+                                        title = editTitle.trim(),
+                                        location = editLocation.trim(),
+                                        bio = editBio.trim()
                                     )
+                                    viewModel.updateProfile(updated)
                                     isEditing = false
                                     Toast.makeText(context, "Profile updated!", Toast.LENGTH_SHORT).show()
                                 }) { Text("Save") }
@@ -232,13 +236,11 @@ fun ProfileScreen(
                 }
 
                 Spacer(Modifier.height(16.dp))
-                val userApps = ConnectiveRepository.applications.filter { app ->
-                    user.role == "employer" || user.role == "admin" || app.candidateEmail.equals(user.email, ignoreCase = true)
-                }
-                val appliedCount = userApps.count { it.status.equals("Applied", ignoreCase = true) }
-                val shortlistedCount = userApps.count { it.status.equals("Shortlisted", ignoreCase = true) }
-                val hiredCount = userApps.count { it.status.equals("Hired", ignoreCase = true) }
-                val savedCount = ConnectiveRepository.jobs.count { it.isSaved }
+
+                val appliedCount = applications.count { it.status.equals("Applied", ignoreCase = true) }
+                val shortlistedCount = applications.count { it.status.equals("Shortlisted", ignoreCase = true) }
+                val hiredCount = applications.count { it.status.equals("Hired", ignoreCase = true) }
+                val savedCount = savedJobs.size
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -281,19 +283,13 @@ fun ProfileScreen(
                         MenuRow(Icons.Default.Settings, "Preferences") {
                             activeDialog = "preferences"
                         }
-                        if (user.role == "admin" || user.role == "employer") {
-                            HorizontalDivider(color = LightBlueBg)
-                            MenuRow(Icons.Default.SupervisorAccount, "Admin User Management") {
-                                activeDialog = "admin_users"
-                            }
-                        }
                     }
                 }
 
                 Spacer(Modifier.height(16.dp))
                 OutlinedButton(
                     onClick = {
-                        ConnectiveRepository.logout()
+                        viewModel.resetState()
                         onSignOutClick()
                     },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
@@ -307,17 +303,13 @@ fun ProfileScreen(
         // Dialog for Stat items (Applied, Shortlisted, Hired, Saved)
         if (activeStatDialog != null) {
             val dialogCategory = activeStatDialog!!
-            val userApps = ConnectiveRepository.applications.filter { app ->
-                user.role == "employer" || user.role == "admin" || app.candidateEmail.equals(user.email, ignoreCase = true)
-            }
-            val savedJobsCount = ConnectiveRepository.jobs.count { it.isSaved }
 
             AlertDialog(
                 onDismissRequest = { activeStatDialog = null },
                 title = {
                     Text(
                         text = when (dialogCategory) {
-                            "Saved" -> "Saved Jobs ($savedJobsCount)"
+                            "Saved" -> "Saved Jobs (${savedJobs.size})"
                             else -> "$dialogCategory Applications"
                         },
                         fontWeight = FontWeight.Bold,
@@ -334,7 +326,6 @@ fun ProfileScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         if (dialogCategory == "Saved") {
-                            val savedJobs = ConnectiveRepository.jobs.filter { it.isSaved }
                             if (savedJobs.isEmpty()) {
                                 Text("No saved jobs yet.", color = TextGray, fontSize = 13.sp)
                             } else {
@@ -353,21 +344,12 @@ fun ProfileScreen(
                                                 Text(job.company, fontSize = 12.sp, color = TextGray)
                                                 Text(job.location, fontSize = 11.sp, color = BluePrimary)
                                             }
-                                            IconButton(onClick = {
-                                                ConnectiveRepository.toggleSaveJob(job.id)
-                                            }) {
-                                                Icon(
-                                                    Icons.Default.Bookmark,
-                                                    contentDescription = "Unsave",
-                                                    tint = BluePrimary
-                                                )
-                                            }
                                         }
                                     }
                                 }
                             }
                         } else {
-                            val filteredApps = userApps.filter {
+                            val filteredApps = applications.filter {
                                 it.status.equals(dialogCategory, ignoreCase = true)
                             }
 
@@ -405,10 +387,10 @@ fun ProfileScreen(
                                             }
                                             Spacer(Modifier.height(2.dp))
                                             Text(app.company, fontSize = 12.sp, color = TextGray)
-                                            Text("Applied: ${app.appliedDate}", fontSize = 11.sp, color = TextGray)
+                                            Text("Applied: ${TimeUtils.formatRelativeTime(app.createdAt)}", fontSize = 11.sp, color = TextGray)
                                             if (app.attachments.isNotEmpty()) {
                                                 Spacer(Modifier.height(4.dp))
-                                                Text("Attachments: ${app.attachments.joinToString(", ")}", fontSize = 10.sp, color = BluePrimary)
+                                                Text("Attachments: ${app.attachments.joinToString(", ") { it.name }}", fontSize = 10.sp, color = BluePrimary)
                                             }
                                         }
                                     }
@@ -427,73 +409,11 @@ fun ProfileScreen(
 
         // Dialogs for Menu Items
         when (activeDialog) {
-            "admin_users" -> {
-                val registeredUsers = ConnectiveRepository.registeredUsers
-
-                AlertDialog(
-                    onDismissRequest = { activeDialog = null },
-                    title = {
-                        Text(
-                            text = "Admin User Management (${registeredUsers.size})",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = TextNavy
-                        )
-                    },
-                    text = {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 350.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            registeredUsers.forEach { u ->
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = CardDefaults.cardColors(containerColor = BackgroundLight)
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(u.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextDark)
-                                            Text("Email: ${u.email}", fontSize = 11.sp, color = TextGray)
-                                            Text("Role: ${u.role.uppercase()} • ${u.title}", fontSize = 11.sp, color = BluePrimary)
-                                        }
-                                        if (u.id != user.id) {
-                                            IconButton(onClick = {
-                                                ConnectiveRepository.deleteUser(u.id)
-                                                Toast.makeText(context, "User ${u.name} removed", Toast.LENGTH_SHORT).show()
-                                            }) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Delete,
-                                                    contentDescription = "Delete User",
-                                                    tint = Color.Red
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        Button(onClick = { activeDialog = null }) { Text("Close") }
-                    }
-                )
-            }
-
             "personal" -> {
-                var pName by remember { mutableStateOf(user.name) }
-                var pPhone by remember { mutableStateOf(user.phone) }
-                var pEmail by remember { mutableStateOf(user.email) }
-                var pLocation by remember { mutableStateOf(user.location) }
+                var pName by remember { mutableStateOf(currentUser.name) }
+                var pPhone by remember { mutableStateOf(currentUser.phone) }
+                var pEmail by remember { mutableStateOf(currentUser.email) }
+                var pLocation by remember { mutableStateOf(currentUser.location) }
 
                 AlertDialog(
                     onDismissRequest = { activeDialog = null },
@@ -560,17 +480,13 @@ fun ProfileScreen(
                     },
                     confirmButton = {
                         Button(onClick = {
-                            ConnectiveRepository.updateUserProfileDetails(
-                                name = pName,
-                                email = pEmail,
-                                phone = pPhone,
-                                location = pLocation,
-                                title = user.title,
-                                educationLevel = user.educationLevel,
-                                experienceYears = user.experienceYears,
-                                skills = user.skills,
-                                bio = user.bio
+                            val updated = currentUser.copy(
+                                name = pName.trim(),
+                                email = pEmail.trim(),
+                                phone = pPhone.trim(),
+                                location = pLocation.trim()
                             )
+                            viewModel.updateProfile(updated)
                             activeDialog = null
                             Toast.makeText(context, "Personal Information saved!", Toast.LENGTH_SHORT).show()
                         }) { Text("Save Changes") }
@@ -582,8 +498,8 @@ fun ProfileScreen(
             }
 
             "education" -> {
-                var eduLevel by remember { mutableStateOf(user.educationLevel) }
-                var userSkills by remember { mutableStateOf(user.skills) }
+                var eduLevel by remember { mutableStateOf(currentUser.educationLevel) }
+                var userSkills by remember { mutableStateOf(currentUser.skills) }
                 val educationLevels = listOf("Master's Degree", "Bachelor's Degree", "Diploma", "Certificate", "Secondary School")
 
                 AlertDialog(
@@ -626,16 +542,11 @@ fun ProfileScreen(
                     },
                     confirmButton = {
                         Button(onClick = {
-                            ConnectiveRepository.updateUserProfileDetails(
-                                name = user.name,
-                                phone = user.phone,
-                                location = user.location,
-                                title = user.title,
+                            val updated = currentUser.copy(
                                 educationLevel = eduLevel,
-                                experienceYears = user.experienceYears,
-                                skills = userSkills,
-                                bio = user.bio
+                                skills = userSkills.trim()
                             )
+                            viewModel.updateProfile(updated)
                             activeDialog = null
                             Toast.makeText(context, "Education & Skills saved!", Toast.LENGTH_SHORT).show()
                         }) { Text("Save Changes") }
@@ -647,9 +558,9 @@ fun ProfileScreen(
             }
 
             "work" -> {
-                var workTitle by remember { mutableStateOf(user.title) }
-                var expYears by remember { mutableIntStateOf(user.experienceYears) }
-                var userBio by remember { mutableStateOf(user.bio) }
+                var workTitle by remember { mutableStateOf(currentUser.title) }
+                var expYears by remember { mutableIntStateOf(currentUser.experienceYears) }
+                var userBio by remember { mutableStateOf(currentUser.bio) }
                 val expOptions = listOf(0, 1, 2, 3, 5)
 
                 AlertDialog(
@@ -704,16 +615,12 @@ fun ProfileScreen(
                     },
                     confirmButton = {
                         Button(onClick = {
-                            ConnectiveRepository.updateUserProfileDetails(
-                                name = user.name,
-                                phone = user.phone,
-                                location = user.location,
-                                title = workTitle,
-                                educationLevel = user.educationLevel,
+                            val updated = currentUser.copy(
+                                title = workTitle.trim(),
                                 experienceYears = expYears,
-                                skills = user.skills,
-                                bio = userBio
+                                bio = userBio.trim()
                             )
+                            viewModel.updateProfile(updated)
                             activeDialog = null
                             Toast.makeText(context, "Work Experience saved!", Toast.LENGTH_SHORT).show()
                         }) { Text("Save Changes") }

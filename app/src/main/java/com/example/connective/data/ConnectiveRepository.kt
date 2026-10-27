@@ -1,490 +1,858 @@
 package com.example.connective.data
 
 import android.content.Context
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import com.example.connective.data.db.ConnectiveDbHelper
-import com.example.connective.data.db.SessionManager
+import android.net.Uri
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.messaging.ktx.messaging
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.ktx.storage
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
 
-sealed class QualificationResult {
-    data class Success(val message: String) : QualificationResult()
-    data class Ineligible(val reason: String) : QualificationResult()
-    data class Error(val message: String) : QualificationResult()
-}
+class AccountSuspendedException(message: String) : Exception(message)
 
 object ConnectiveRepository {
-    private var dbHelper: ConnectiveDbHelper? = null
-    private var sessionManager: SessionManager? = null
 
-    var currentUser by mutableStateOf<User?>(null)
+    private val auth: FirebaseAuth by lazy { Firebase.auth }
+    private val firestore: FirebaseFirestore by lazy { Firebase.firestore }
+    private val storage: FirebaseStorage by lazy { Firebase.storage }
 
-    val registeredUsers = mutableStateListOf(
-        User(
-            id = 1,
-            name = "Shepherd Sadick",
-            email = "shepherd@example.com",
-            role = "seeker",
-            title = "Computer Science Graduate",
-            location = "Lilongwe, Malawi",
-            phone = "+265 999 123 456",
-            educationLevel = "Bachelor's Degree",
-            experienceYears = 2,
-            skills = "Kotlin, Mobile Development, REST APIs",
-            bio = "Motivated computer science graduate with a strong interest in software development.",
-            avatarInitials = "SS"
-        ),
-        User(
-            id = 2,
-            name = "Sunrise Media",
-            email = "employer@example.com",
-            role = "employer",
-            companyName = "Sunrise Media",
-            title = "Hiring Manager",
-            location = "Blantyre, Malawi",
-            phone = "+265 888 777 666",
-            avatarInitials = "SM"
-        )
-    )
-
-    val jobs = mutableStateListOf(
-        Job(
-            id = 1,
-            title = "Software Developer",
-            company = "TechWave Ltd",
-            location = "Lilongwe, Malawi",
-            type = "Full-time",
-            salary = "MWK 600,000 – 1,000,000",
-            minEducation = "Bachelor's Degree",
-            minExperienceYears = 2,
-            description = "Develop high quality Android and web applications for local and international clients.",
-            requirements = listOf(
-                "Bachelor's degree in Computer Science or Software Engineering",
-                "2+ years experience with Kotlin or Java",
-                "Experience with REST APIs and Git version control"
-            )
-        ),
-        Job(
-            id = 2,
-            title = "Marketing Officer",
-            company = "Sunrise Media",
-            location = "Blantyre, Malawi",
-            type = "Full-time",
-            salary = "MWK 400,000 – 700,000",
-            minEducation = "Diploma",
-            minExperienceYears = 1,
-            description = "Drive strategic digital marketing campaigns and manage social media branding.",
-            requirements = listOf(
-                "Diploma or Bachelor's Degree in Marketing or Communications",
-                "1+ years experience managing social media accounts",
-                "Strong copywriting and visual design awareness"
-            )
-        ),
-        Job(
-            id = 3,
-            title = "Senior Accountant",
-            company = "Global Solutions",
-            location = "Lilongwe, Malawi",
-            type = "Full-time",
-            salary = "MWK 700,000 – 1,200,000",
-            minEducation = "Bachelor's Degree",
-            minExperienceYears = 3,
-            description = "Manage daily financial statements, budget audits and tax compliance.",
-            requirements = listOf(
-                "Bachelor's degree in Accounting or ACCA qualification",
-                "3+ years corporate finance experience",
-                "Proficiency in QuickBooks and Excel"
-            )
-        ),
-        Job(
-            id = 4,
-            title = "UI/UX Designer",
-            company = "Innovate MW",
-            location = "Mzuzu, Malawi",
-            type = "Contract",
-            salary = "MWK 500,000 – 750,000",
-            minEducation = "Certificate",
-            minExperienceYears = 1,
-            description = "Create modern user experiences and Figma mockups for digital products.",
-            requirements = listOf(
-                "Certificate or Diploma in Design or IT",
-                "1+ years experience in UI/UX design",
-                "Proficiency in Figma and Adobe XD"
-            )
-        )
-    )
-
-    val applications = mutableStateListOf(
-        JobApplication(
-            id = 1,
-            jobId = 1,
-            jobTitle = "Software Developer",
-            company = "TechWave Ltd",
-            candidateName = "Joyce Phiri",
-            candidateEmail = "joyce@example.com",
-            candidatePhone = "+265 991 223 344",
-            candidateLocation = "Lilongwe",
-            candidateEducation = "Bachelor's Degree",
-            candidateExperienceYears = 3,
-            candidateSkills = "Kotlin, Jetpack Compose, Firebase",
-            coverNote = "Passionate Android developer ready to build great apps.",
-            attachments = listOf("Degree_Certificate.pdf", "Passport_Photo.png"),
-            appliedDate = "2 days ago",
-            status = "Applied"
-        ),
-        JobApplication(
-            id = 2,
-            jobId = 1,
-            jobTitle = "Software Developer",
-            company = "TechWave Ltd",
-            candidateName = "Brian Moyo",
-            candidateEmail = "brian@example.com",
-            candidatePhone = "+265 888 112 233",
-            candidateLocation = "Blantyre",
-            candidateEducation = "Bachelor's Degree",
-            candidateExperienceYears = 4,
-            candidateSkills = "Android, Java, REST APIs",
-            coverNote = "Experienced mobile engineer.",
-            attachments = listOf("BSc_Computer_Science.pdf", "CV_BrianMoyo.pdf"),
-            appliedDate = "3 days ago",
-            status = "Shortlisted"
-        ),
-        JobApplication(
-            id = 3,
-            jobId = 2,
-            jobTitle = "Marketing Officer",
-            company = "Sunrise Media",
-            candidateName = "Grace Chisomo",
-            candidateEmail = "grace@example.com",
-            candidatePhone = "+265 993 445 566",
-            candidateLocation = "Blantyre",
-            candidateEducation = "Diploma",
-            candidateExperienceYears = 2,
-            candidateSkills = "Digital Marketing, SEO, Social Media",
-            coverNote = "Creative digital marketer with proven campaign results.",
-            attachments = listOf("Marketing_Diploma.pdf"),
-            appliedDate = "4 days ago",
-            status = "Shortlisted"
-        )
-    )
-
-    val messages = mutableStateListOf(
-        ChatMessage(1, "Sunrise Media", "Hi, thank you for applying for the position.", false, "10:30 AM"),
-        ChatMessage(2, "Applicant", "Thank you! I'm very excited about the opportunity.", true, "10:32 AM"),
-        ChatMessage(3, "Sunrise Media", "Would you be available for an interview this week?", false, "10:35 AM"),
-        ChatMessage(4, "Applicant", "Yes, I'm available. Please let me know the best time.", true, "10:36 AM")
-    )
+    // Init context if needed for local prefs or notifications
+    private var appContext: Context? = null
 
     fun initialize(context: Context) {
-        if (dbHelper != null) return
-        val db = ConnectiveDbHelper(context)
-        val session = SessionManager(context)
-        dbHelper = db
-        sessionManager = session
-
-        // Load persisted data from SQLite database
-        val dbUsers = db.getAllUsers()
-        if (dbUsers.isNotEmpty()) {
-            registeredUsers.clear()
-            registeredUsers.addAll(dbUsers)
-        }
-
-        val dbJobs = db.getAllJobs()
-        if (dbJobs.isNotEmpty()) {
-            jobs.clear()
-            jobs.addAll(dbJobs)
-        }
-
-        val dbApps = db.getAllApplications()
-        if (dbApps.isNotEmpty()) {
-            applications.clear()
-            applications.addAll(dbApps)
-        }
-
-        val dbMsgs = db.getAllMessages()
-        if (dbMsgs.isNotEmpty()) {
-            messages.clear()
-            messages.addAll(dbMsgs)
-        }
-
-        // Restore active user session if previously logged in
-        val savedEmail = session.savedUserEmail
-        if (!savedEmail.isNullOrBlank()) {
-            val user = registeredUsers.find { it.email.equals(savedEmail, ignoreCase = true) }
-            if (user != null) {
-                currentUser = user
-            }
-        }
+        appContext = context.applicationContext
     }
 
+    // Qualification Rank Helper
     fun getEducationRank(level: String): Int {
         return when (level.lowercase().trim()) {
             "master's degree", "masters degree", "masters", "master" -> 4
             "bachelor's degree", "bachelors degree", "bachelors", "bachelor", "degree" -> 3
             "diploma" -> 2
             "certificate" -> 1
-            else -> 0 // "Secondary School", "None", etc.
+            else -> 0
         }
     }
 
-    fun loginUser(email: String, name: String = "Shepherd Sadick", role: String = "seeker"): User {
-        val existingUser = registeredUsers.find { it.email.equals(email, ignoreCase = true) }
-        val user = if (existingUser != null) {
-            existingUser
-        } else {
-            val initials = name.split(" ")
-                .mapNotNull { it.firstOrNull()?.toString() }
-                .take(2)
-                .joinToString("")
-                .ifEmpty { "US" }
-
-            val newUser = User(
-                id = (100..999).random(),
-                name = name,
-                email = email,
-                role = role,
-                avatarInitials = initials.uppercase()
-            )
-            registeredUsers.add(newUser)
-            dbHelper?.saveUser(newUser)
-            newUser
-        }
-
-        currentUser = user
-        sessionManager?.savedUserEmail = user.email
-        return user
-    }
-
-    fun registerUser(name: String, email: String, role: String, companyName: String = ""): User {
-        val existingUser = registeredUsers.find { it.email.equals(email, ignoreCase = true) }
-        val user = if (existingUser != null) {
-            existingUser
-        } else {
-            val initials = name.split(" ")
-                .mapNotNull { it.firstOrNull()?.toString() }
-                .take(2)
-                .joinToString("")
-                .ifEmpty { "US" }
-
-            val newUser = User(
-                id = (100..999).random(),
-                name = name,
-                email = email,
-                role = role,
-                companyName = companyName,
-                avatarInitials = initials.uppercase()
-            )
-            registeredUsers.add(newUser)
-            dbHelper?.saveUser(newUser)
-            newUser
-        }
-
-        currentUser = user
-        sessionManager?.savedUserEmail = user.email
-        return user
-    }
-
-    fun logout() {
-        currentUser = null
-        sessionManager?.clearSession()
-    }
-
-    fun updateUserProfileDetails(
-        name: String,
-        email: String = currentUser?.email ?: "",
-        phone: String,
-        location: String,
-        title: String,
-        educationLevel: String,
-        experienceYears: Int,
-        skills: String,
-        bio: String
-    ) {
-        val user = currentUser ?: return
-        val initials = name.split(" ")
+    private fun getInitials(name: String): String {
+        return name.split(" ")
             .mapNotNull { it.firstOrNull()?.toString() }
             .take(2)
             .joinToString("")
             .ifEmpty { "US" }
+            .uppercase()
+    }
 
-        val newEmail = email.ifBlank { user.email }
+    // ----------------------------------------------------------------
+    // AUTHENTICATION
+    // ----------------------------------------------------------------
 
-        val updatedUser = user.copy(
-            name = name.ifBlank { user.name },
-            email = newEmail,
-            phone = phone.ifBlank { user.phone },
-            location = location.ifBlank { user.location },
-            title = title.ifBlank { user.title },
-            educationLevel = educationLevel.ifBlank { user.educationLevel },
-            experienceYears = experienceYears,
-            skills = skills.ifBlank { user.skills },
-            bio = bio.ifBlank { user.bio },
-            avatarInitials = initials.uppercase()
-        )
+    val currentAuthUid: String?
+        get() = auth.currentUser?.uid
 
-        currentUser = updatedUser
-        sessionManager?.savedUserEmail = newEmail
+    val currentUserFlow: Flow<User?> = callbackFlow {
+        var listenerRegistration = auth.addAuthStateListener { firebaseAuth ->
+            val uid = firebaseAuth.currentUser?.uid
+            if (uid == null) {
+                trySend(null)
+            } else {
+                val reg = firestore.collection("users").document(uid)
+                    .addSnapshotListener { snapshot, _ ->
+                        if (snapshot != null && snapshot.exists()) {
+                            val user = snapshot.toObject(User::class.java)
+                            trySend(user)
+                        } else {
+                            trySend(null)
+                        }
+                    }
+                // Handle cancellation
+            }
+        }
+        awaitClose {
+            // Cleanup auth state listener
+        }
+    }
 
-        val index = registeredUsers.indexOfFirst { it.id == user.id || it.email.equals(user.email, ignoreCase = true) }
-        if (index != -1) {
-            registeredUsers[index] = updatedUser
-        } else {
-            registeredUsers.add(updatedUser)
+    suspend fun registerUser(
+        name: String,
+        email: String,
+        password: String,
+        role: String,
+        companyName: String = ""
+    ): User {
+        val sanitizedRole = role.lowercase().trim()
+        if (sanitizedRole == "admin") {
+            throw IllegalArgumentException("Self-registration as administrator is not permitted.")
+        }
+        if (sanitizedRole != "seeker" && sanitizedRole != "employer") {
+            throw IllegalArgumentException("Invalid registration role specified.")
         }
 
-        dbHelper?.saveUser(updatedUser)
+        val authResult = auth.createUserWithEmailAndPassword(email, password).await()
+        val uid = authResult.user?.uid ?: throw Exception("Registration failed.")
+
+        val now = System.currentTimeMillis()
+        val newUser = User(
+            uid = uid,
+            name = name,
+            email = email,
+            role = sanitizedRole,
+            status = "active",
+            companyName = if (sanitizedRole == "employer") companyName.ifBlank { name } else "",
+            avatarInitials = getInitials(name),
+            createdAt = now
+        )
+
+        firestore.collection("users").document(uid).set(newUser).await()
+
+        // Welcome Notification
+        val welcomeNotif = NotificationMessages.welcomeUser(name)
+        val notifRef = firestore.collection("users").document(uid).collection("notifications").document()
+        val appNotif = AppNotification(
+            id = notifRef.id,
+            title = welcomeNotif.title,
+            body = welcomeNotif.body,
+            type = welcomeNotif.type,
+            relatedId = uid,
+            isRead = false,
+            createdAt = now
+        )
+        firestore.collection("users").document(uid).collection("notifications").document(notifRef.id).set(appNotif).await()
+
+        updateFcmTokenForCurrentUser()
+        return newUser
     }
 
-    fun deleteUser(userId: Int) {
-        registeredUsers.removeAll { it.id == userId }
-        dbHelper?.deleteUser(userId)
+    suspend fun loginUser(email: String, password: String): User {
+        val authResult = auth.signInWithEmailAndPassword(email, password).await()
+        val uid = authResult.user?.uid ?: throw Exception("Login failed.")
+
+        val docSnapshot = firestore.collection("users").document(uid).get().await()
+        if (!docSnapshot.exists()) {
+            auth.signOut()
+            throw Exception("User profile document not found.")
+        }
+
+        val user = docSnapshot.toObject(User::class.java) ?: throw Exception("Invalid user profile format.")
+
+        if (user.status.equals("suspended", ignoreCase = true)) {
+            auth.signOut()
+            throw AccountSuspendedException("Your account has been suspended. Please contact support.")
+        }
+
+        updateFcmTokenForCurrentUser()
+        return user
     }
 
-    fun addJob(
+    suspend fun sendPasswordResetEmail(email: String) {
+        auth.sendPasswordResetEmail(email).await()
+    }
+
+    fun logout() {
+        auth.signOut()
+    }
+
+    suspend fun updateFcmTokenForCurrentUser() {
+        val uid = currentAuthUid ?: return
+        try {
+            val token = Firebase.messaging.token.await()
+            if (token.isNotBlank()) {
+                firestore.collection("users").document(uid).update("fcmToken", token).await()
+            }
+        } catch (_: Exception) {
+            // Non-critical background task
+        }
+    }
+
+    suspend fun updateFcmToken(token: String) {
+        val uid = currentAuthUid ?: return
+        try {
+            firestore.collection("users").document(uid).update("fcmToken", token).await()
+        } catch (_: Exception) {}
+    }
+
+    // ----------------------------------------------------------------
+    // USER PROFILE
+    // ----------------------------------------------------------------
+
+    suspend fun updateUserProfile(user: User) {
+        val uid = user.uid.ifBlank { currentAuthUid ?: return }
+        val updatedUser = user.copy(
+            uid = uid,
+            avatarInitials = getInitials(user.name)
+        )
+        firestore.collection("users").document(uid).set(updatedUser, SetOptions.merge()).await()
+    }
+
+    fun searchSeekersFlow(
+        query: String = "",
+        education: String = "All",
+        location: String = "",
+        minExperienceYears: Int = 0
+    ): Flow<List<User>> = callbackFlow {
+        val listener = firestore.collection("users")
+            .whereEqualTo("role", "seeker")
+            .whereEqualTo("status", "active")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val seekers = snapshot?.toObjects(User::class.java) ?: emptyList()
+                val filtered = seekers.filter { u ->
+                    val matchesQuery = query.isBlank() ||
+                            u.name.contains(query, ignoreCase = true) ||
+                            u.skills.contains(query, ignoreCase = true) ||
+                            u.title.contains(query, ignoreCase = true)
+
+                    val matchesLocation = location.isBlank() || u.location.contains(location, ignoreCase = true)
+
+                    val matchesEducation = education == "All" ||
+                            u.educationLevel.equals(education, ignoreCase = true) ||
+                            getEducationRank(u.educationLevel) >= getEducationRank(education)
+
+                    val matchesExp = u.experienceYears >= minExperienceYears
+
+                    matchesQuery && matchesLocation && matchesEducation && matchesExp
+                }
+                trySend(filtered)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    // ----------------------------------------------------------------
+    // JOBS
+    // ----------------------------------------------------------------
+
+    fun getOpenJobsFlow(): Flow<List<Job>> = callbackFlow {
+        val listener = firestore.collection("jobs")
+            .whereEqualTo("status", "open")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val jobs = snapshot?.toObjects(Job::class.java) ?: emptyList()
+                val sorted = jobs.sortedByDescending { it.createdAt }
+                trySend(sorted)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    fun getEmployerJobsFlow(employerId: String): Flow<List<Job>> = callbackFlow {
+        if (employerId.isBlank()) {
+            trySend(emptyList())
+            awaitClose {}
+            return@callbackFlow
+        }
+        val listener = firestore.collection("jobs")
+            .whereEqualTo("employerId", employerId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val jobs = (snapshot?.toObjects(Job::class.java) ?: emptyList())
+                    .filter { it.status != "removed" }
+                    .sortedByDescending { it.createdAt }
+                trySend(jobs)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun getJobById(jobId: String): Job? {
+        if (jobId.isBlank()) return null
+        val doc = firestore.collection("jobs").document(jobId).get().await()
+        return if (doc.exists()) doc.toObject(Job::class.java) else null
+    }
+
+    suspend fun addJob(
         title: String,
         company: String,
+        employerId: String,
         location: String,
         type: String,
+        category: String = "IT",
         salary: String,
         minEducation: String = "Bachelor's Degree",
         minExperienceYears: Int = 1,
         description: String = ""
     ): Job {
-        val newId = (jobs.maxOfOrNull { it.id } ?: 0) + 1
-        val job = Job(
-            id = newId,
+        val docRef = firestore.collection("jobs").document()
+        val newJob = Job(
+            id = docRef.id,
             title = title.trim(),
-            company = company.ifBlank { currentUser?.companyName ?: "Sunrise Media" },
+            company = company.trim(),
+            employerId = employerId,
             location = location.trim(),
             type = type,
-            salary = salary.ifBlank { "Negotiable" },
+            category = category,
+            salary = salary.trim().ifBlank { "Negotiable" },
             minEducation = minEducation,
             minExperienceYears = minExperienceYears,
-            description = description.ifBlank { "Describe the role and responsibilities..." }
+            description = description.ifBlank { "Role details and responsibilities..." },
+            status = "open",
+            createdAt = System.currentTimeMillis()
         )
-        jobs.add(0, job)
-        dbHelper?.saveJob(job)
-        return job
+        docRef.set(newJob).await()
+        return newJob
     }
 
-    fun deleteJob(jobId: Int) {
-        jobs.removeAll { it.id == jobId }
-        dbHelper?.deleteJob(jobId)
+    suspend fun updateJob(job: Job) {
+        firestore.collection("jobs").document(job.id).set(job, SetOptions.merge()).await()
     }
 
-    fun toggleSaveJob(jobId: Int) {
-        val index = jobs.indexOfFirst { it.id == jobId }
-        if (index != -1) {
-            val job = jobs[index]
-            val updatedJob = job.copy(isSaved = !job.isSaved)
-            jobs[index] = updatedJob
-            dbHelper?.saveJob(updatedJob)
+    suspend fun closeJob(jobId: String) {
+        val job = getJobById(jobId)
+        firestore.collection("jobs").document(jobId).update("status", "closed").await()
+        if (job != null) {
+            notifyApplicantsOfJobChange(job, "closed")
         }
     }
 
-    fun applyForJobWithQualification(
-        jobId: Int,
-        name: String,
-        email: String,
+    suspend fun deleteJob(jobId: String) {
+        val job = getJobById(jobId)
+        firestore.collection("jobs").document(jobId).update("status", "removed").await()
+        if (job != null) {
+            notifyApplicantsOfJobChange(job, "removed")
+        }
+    }
+
+    private suspend fun notifyApplicantsOfJobChange(job: Job, action: String) {
+        try {
+            val appsSnap = firestore.collection("applications")
+                .whereEqualTo("jobId", job.id)
+                .get().await()
+
+            if (!appsSnap.isEmpty) {
+                val batch = firestore.batch()
+                val now = System.currentTimeMillis()
+                val payload = NotificationMessages.jobClosedOrRemoved(job.title, job.company)
+
+                appsSnap.documents.forEach { doc ->
+                    val seekerId = doc.getString("seekerId") ?: ""
+                    if (seekerId.isNotBlank()) {
+                        val notifRef = firestore.collection("users").document(seekerId)
+                            .collection("notifications").document()
+                        val notification = AppNotification(
+                            id = notifRef.id,
+                            title = payload.title,
+                            body = "Job '$action': ${payload.body}",
+                            type = payload.type,
+                            relatedId = job.id,
+                            isRead = false,
+                            createdAt = now
+                        )
+                        batch.set(notifRef, notification)
+                    }
+                }
+                batch.commit().await()
+            }
+        } catch (_: Exception) {}
+    }
+
+    // ----------------------------------------------------------------
+    // SAVED JOBS (PER USER)
+    // ----------------------------------------------------------------
+
+    fun getSavedJobIdsFlow(seekerId: String): Flow<Set<String>> = callbackFlow {
+        if (seekerId.isBlank()) {
+            trySend(emptySet())
+            awaitClose {}
+            return@callbackFlow
+        }
+        val listener = firestore.collection("users").document(seekerId)
+            .collection("savedJobs")
+            .addSnapshotListener { snapshot, _ ->
+                val ids = snapshot?.documents?.map { it.id }?.toSet() ?: emptySet()
+                trySend(ids)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun toggleSaveJob(seekerId: String, jobId: String, currentlySaved: Boolean) {
+        if (seekerId.isBlank() || jobId.isBlank()) return
+        val docRef = firestore.collection("users").document(seekerId)
+            .collection("savedJobs").document(jobId)
+
+        if (currentlySaved) {
+            docRef.delete().await()
+        } else {
+            docRef.set(mapOf("jobId" to jobId, "savedAt" to System.currentTimeMillis())).await()
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // APPLICATIONS & DOCUMENTS
+    // ----------------------------------------------------------------
+
+    suspend fun checkAlreadyApplied(jobId: String, seekerId: String): Boolean {
+        if (jobId.isBlank() || seekerId.isBlank()) return false
+        val snap = firestore.collection("applications")
+            .whereEqualTo("jobId", jobId)
+            .whereEqualTo("seekerId", seekerId)
+            .get().await()
+        return !snap.isEmpty
+    }
+
+    suspend fun uploadDocumentFile(
+        seekerId: String,
+        applicationId: String,
+        fileUri: Uri,
+        fileName: String,
+        onProgress: (Float) -> Unit
+    ): AttachmentItem {
+        return try {
+            val storageRef = storage.reference.child("applications/$seekerId/$applicationId/$fileName")
+            val uploadTask = storageRef.putFile(fileUri)
+
+            uploadTask.addOnProgressListener { snapshot ->
+                val progress = (snapshot.bytesTransferred.toFloat() / snapshot.totalByteCount.toFloat())
+                onProgress(progress)
+            }
+
+            uploadTask.await()
+            val downloadUrl = storageRef.downloadUrl.await().toString()
+            AttachmentItem(name = fileName, url = downloadUrl)
+        } catch (e: Exception) {
+            // Fallback if Storage is disabled or fails: return name and fileUri string
+            AttachmentItem(name = fileName, url = fileUri.toString())
+        }
+    }
+
+    suspend fun submitApplication(
+        job: Job,
+        seeker: User,
         phone: String,
         location: String,
         educationLevel: String,
         experienceYears: Int,
         skills: String,
         coverNote: String,
-        attachments: List<String> = emptyList()
+        pickedFiles: List<Pair<Uri, String>>,
+        onProgress: (Float) -> Unit = {}
     ): QualificationResult {
-        val job = jobs.find { it.id == jobId } ?: return QualificationResult.Error("Job not found.")
+        // Qualification Eligibility Checks
+        val candidateEduRank = getEducationRank(educationLevel)
+        val jobMinEduRank = getEducationRank(job.minEducation)
 
-        val candidateEducationRank = getEducationRank(educationLevel)
-        val jobMinEducationRank = getEducationRank(job.minEducation)
-
-        if (candidateEducationRank < jobMinEducationRank) {
+        if (candidateEduRank < jobMinEduRank) {
             return QualificationResult.Ineligible(
-                "Qualification Ineligible: This position requires at least a ${job.minEducation}. Your current level ($educationLevel) does not meet the minimum requirement for this role."
+                "Qualification Ineligible: This position requires at least a ${job.minEducation}. Your current level ($educationLevel) does not meet the minimum requirement."
             )
         }
 
         if (experienceYears < job.minExperienceYears) {
             return QualificationResult.Ineligible(
-                "Experience Ineligible: This position requires at least ${job.minExperienceYears} year(s) of experience. You currently selected $experienceYears year(s)."
+                "Experience Ineligible: This position requires at least ${job.minExperienceYears} year(s) of experience. You entered $experienceYears year(s)."
             )
         }
 
-        val existing = applications.find { it.jobId == jobId && it.candidateEmail == email }
-        if (existing != null) {
+        if (checkAlreadyApplied(job.id, seeker.uid)) {
             return QualificationResult.Ineligible("You have already applied for this position.")
         }
 
-        val newApp = JobApplication(
-            id = (applications.maxOfOrNull { it.id } ?: 0) + 1,
-            jobId = jobId,
+        val appDocRef = firestore.collection("applications").document()
+        val appId = appDocRef.id
+
+        val uploadedAttachments = mutableListOf<AttachmentItem>()
+        if (pickedFiles.isNotEmpty()) {
+            pickedFiles.forEachIndexed { index, pair ->
+                val uri = pair.first
+                val name = pair.second
+                val item = uploadDocumentFile(seeker.uid, appId, uri, name) { prog ->
+                    val totalProgress = (index + prog) / pickedFiles.size
+                    onProgress(totalProgress)
+                }
+                uploadedAttachments.add(item)
+            }
+        }
+
+        val now = System.currentTimeMillis()
+        val newApplication = JobApplication(
+            id = appId,
+            jobId = job.id,
             jobTitle = job.title,
             company = job.company,
-            candidateName = name,
-            candidateEmail = email,
+            employerId = job.employerId,
+            seekerId = seeker.uid,
+            candidateName = seeker.name,
+            candidateEmail = seeker.email,
             candidatePhone = phone,
             candidateLocation = location,
             candidateEducation = educationLevel,
             candidateExperienceYears = experienceYears,
             candidateSkills = skills,
             coverNote = coverNote,
-            attachments = attachments,
-            appliedDate = "Just now",
-            status = "Applied"
+            attachments = uploadedAttachments,
+            status = "Applied",
+            createdAt = now,
+            updatedAt = now
         )
-        applications.add(0, newApp)
-        dbHelper?.saveApplication(newApp)
-        return QualificationResult.Success("Application submitted successfully! Your qualifications & attachments have been submitted.")
+
+        // Batched Write: Application + Notification for Employer
+        val batch = firestore.batch()
+        batch.set(appDocRef, newApplication)
+
+        val notifPayload = NotificationMessages.applicationReceived(seeker.name, job.title)
+        val notifDocRef = firestore.collection("users").document(job.employerId)
+            .collection("notifications").document()
+        val notification = AppNotification(
+            id = notifDocRef.id,
+            title = notifPayload.title,
+            body = notifPayload.body,
+            type = notifPayload.type,
+            relatedId = appId,
+            isRead = false,
+            createdAt = now
+        )
+        batch.set(notifDocRef, notification)
+
+        batch.commit().await()
+        return QualificationResult.Success("Application submitted successfully! Your qualifications and documents have been recorded.")
     }
 
-    fun updateApplicationStatus(appId: Int, newStatus: String) {
-        val index = applications.indexOfFirst { it.id == appId }
-        if (index != -1) {
-            val updatedApp = applications[index].copy(status = newStatus)
-            applications[index] = updatedApp
-            dbHelper?.saveApplication(updatedApp)
+    fun getSeekerApplicationsFlow(seekerId: String): Flow<List<JobApplication>> = callbackFlow {
+        if (seekerId.isBlank()) {
+            trySend(emptyList())
+            awaitClose {}
+            return@callbackFlow
         }
+        val listener = firestore.collection("applications")
+            .whereEqualTo("seekerId", seekerId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val apps = (snapshot?.toObjects(JobApplication::class.java) ?: emptyList())
+                    .sortedByDescending { it.createdAt }
+                trySend(apps)
+            }
+        awaitClose { listener.remove() }
     }
 
-    fun sendMessage(text: String, isMine: Boolean = true, senderOverride: String? = null) {
-        if (text.isBlank()) return
-        val sender = senderOverride ?: if (isMine) (currentUser?.name ?: "Me") else "HR Support"
-        val newMsg = ChatMessage(
-            id = (messages.maxOfOrNull { it.id } ?: 0) + 1,
-            senderName = sender,
+    fun getEmployerApplicationsFlow(employerId: String): Flow<List<JobApplication>> = callbackFlow {
+        if (employerId.isBlank()) {
+            trySend(emptyList())
+            awaitClose {}
+            return@callbackFlow
+        }
+        val listener = firestore.collection("applications")
+            .whereEqualTo("employerId", employerId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val apps = (snapshot?.toObjects(JobApplication::class.java) ?: emptyList())
+                    .sortedByDescending { it.createdAt }
+                trySend(apps)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun updateApplicationStatus(
+        applicationId: String,
+        newStatus: String,
+        seekerId: String,
+        jobTitle: String,
+        company: String = "Company"
+    ) {
+        val now = System.currentTimeMillis()
+        val batch = firestore.batch()
+
+        val appRef = firestore.collection("applications").document(applicationId)
+        batch.update(appRef, mapOf("status" to newStatus, "updatedAt" to now))
+
+        if (seekerId.isNotBlank()) {
+            val notifPayload = NotificationMessages.applicationStatusChanged(jobTitle, company, newStatus)
+            val notifRef = firestore.collection("users").document(seekerId)
+                .collection("notifications").document()
+            val notification = AppNotification(
+                id = notifRef.id,
+                title = notifPayload.title,
+                body = notifPayload.body,
+                type = notifPayload.type,
+                relatedId = applicationId,
+                isRead = false,
+                createdAt = now
+            )
+            batch.set(notifRef, notification)
+        }
+
+        batch.commit().await()
+    }
+
+    // ----------------------------------------------------------------
+    // REAL MESSAGING & CONVERSATIONS
+    // ----------------------------------------------------------------
+
+    fun getUserConversationsFlow(uid: String): Flow<List<Conversation>> = callbackFlow {
+        if (uid.isBlank()) {
+            trySend(emptyList())
+            awaitClose {}
+            return@callbackFlow
+        }
+        val listener = firestore.collection("conversations")
+            .whereArrayContains("participantIds", uid)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = (snapshot?.toObjects(Conversation::class.java) ?: emptyList())
+                    .sortedByDescending { it.lastMessageAt }
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    fun getConversationMessagesFlow(conversationId: String): Flow<List<ChatMessage>> = callbackFlow {
+        if (conversationId.isBlank()) {
+            trySend(emptyList())
+            awaitClose {}
+            return@callbackFlow
+        }
+        val listener = firestore.collection("conversations").document(conversationId)
+            .collection("messages")
+            .orderBy("createdAt", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.toObjects(ChatMessage::class.java) ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun getOrCreateConversation(
+        myUid: String,
+        myName: String,
+        partnerUid: String,
+        partnerName: String,
+        jobId: String? = null
+    ): String {
+        if (myUid.isBlank() || partnerUid.isBlank()) throw IllegalArgumentException("Participant UIDs required")
+
+        // Search if conversation exists
+        val snap = firestore.collection("conversations")
+            .whereArrayContains("participantIds", myUid)
+            .get().await()
+
+        val existing = snap.documents.mapNotNull { it.toObject(Conversation::class.java) }
+            .find { it.participantIds.contains(partnerUid) }
+
+        if (existing != null) {
+            return existing.id
+        }
+
+        // Create new conversation
+        val docRef = firestore.collection("conversations").document()
+        val now = System.currentTimeMillis()
+        val newConv = Conversation(
+            id = docRef.id,
+            participantIds = listOf(myUid, partnerUid),
+            participantNames = mapOf(myUid to myName, partnerUid to partnerName),
+            jobId = jobId,
+            lastMessage = "Conversation started",
+            lastMessageAt = now,
+            unreadBy = emptyList()
+        )
+        docRef.set(newConv).await()
+        return docRef.id
+    }
+
+    suspend fun sendChatMessage(
+        conversationId: String,
+        senderId: String,
+        senderName: String,
+        recipientId: String,
+        text: String
+    ) {
+        if (conversationId.isBlank() || text.isBlank()) return
+        val now = System.currentTimeMillis()
+        val msgDocRef = firestore.collection("conversations").document(conversationId)
+            .collection("messages").document()
+
+        val chatMessage = ChatMessage(
+            id = msgDocRef.id,
+            conversationId = conversationId,
+            senderId = senderId,
+            senderName = senderName,
             text = text.trim(),
-            mine = isMine,
-            timestamp = "Just now"
+            createdAt = now
         )
-        messages.add(newMsg)
-        dbHelper?.saveMessage(newMsg)
-    }
 
-    fun triggerConditionResponse(user: User?) {
-        val userName = user?.name ?: "User"
-        val userApp = applications.find { it.candidateEmail.equals(user?.email, ignoreCase = true) }
-        val company = userApp?.company ?: "Sunrise Media"
-        val jobTitle = userApp?.jobTitle ?: "your job application"
-        val status = userApp?.status ?: "Applied"
+        val batch = firestore.batch()
+        batch.set(msgDocRef, chatMessage)
 
-        val responseText = when (status) {
-            "Shortlisted" -> "Hello $userName! Your application for $jobTitle at $company is SHORTLISTED. We will contact you soon for an interview."
-            "Hired" -> "Congratulations $userName! You have been HIRED for $jobTitle at $company. Welcome to the team!"
-            "Rejected" -> "Hello $userName, thank you for following up regarding $jobTitle at $company. Our HR team has noted your update."
-            "Applied" -> "Hello $userName! We received your message regarding $jobTitle at $company. Our hiring team is reviewing your qualifications and attachments."
-            else -> "Hello $userName! Thank you for contacting Connective HR Support. How can we help you today?"
+        val convRef = firestore.collection("conversations").document(conversationId)
+        batch.update(
+            convRef,
+            mapOf(
+                "lastMessage" to text.trim(),
+                "lastMessageAt" to now,
+                "unreadBy" to FieldValue.arrayUnion(recipientId)
+            )
+        )
+
+        // Notification for Recipient
+        if (recipientId.isNotBlank()) {
+            val notifPayload = NotificationMessages.newMessageReceived(senderName, text)
+            val notifRef = firestore.collection("users").document(recipientId)
+                .collection("notifications").document()
+            val notif = AppNotification(
+                id = notifRef.id,
+                title = notifPayload.title,
+                body = notifPayload.body,
+                type = notifPayload.type,
+                relatedId = conversationId,
+                isRead = false,
+                createdAt = now
+            )
+            batch.set(notifRef, notif)
         }
 
-        val newMsg = ChatMessage(
-            id = (messages.maxOfOrNull { it.id } ?: 0) + 1,
-            senderName = "$company HR",
-            text = responseText,
-            mine = false,
-            timestamp = "Just now"
-        )
-        messages.add(newMsg)
-        dbHelper?.saveMessage(newMsg)
+        batch.commit().await()
+    }
+
+    suspend fun markConversationRead(conversationId: String, myUid: String) {
+        if (conversationId.isBlank() || myUid.isBlank()) return
+        firestore.collection("conversations").document(conversationId)
+            .update("unreadBy", FieldValue.arrayRemove(myUid)).await()
+    }
+
+    // ----------------------------------------------------------------
+    // NOTIFICATIONS
+    // ----------------------------------------------------------------
+
+    fun getNotificationsFlow(uid: String): Flow<List<AppNotification>> = callbackFlow {
+        if (uid.isBlank()) {
+            trySend(emptyList())
+            awaitClose {}
+            return@callbackFlow
+        }
+        val listener = firestore.collection("users").document(uid)
+            .collection("notifications")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = (snapshot?.toObjects(AppNotification::class.java) ?: emptyList())
+                    .sortedByDescending { it.createdAt }
+                trySend(list)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun markNotificationRead(uid: String, notificationId: String) {
+        if (uid.isBlank() || notificationId.isBlank()) return
+        firestore.collection("users").document(uid)
+            .collection("notifications").document(notificationId)
+            .update("isRead", true).await()
+    }
+
+    suspend fun markAllNotificationsRead(uid: String) {
+        if (uid.isBlank()) return
+        val snap = firestore.collection("users").document(uid)
+            .collection("notifications")
+            .whereEqualTo("isRead", false)
+            .get().await()
+
+        if (!snap.isEmpty) {
+            val batch = firestore.batch()
+            snap.documents.forEach { doc ->
+                batch.update(doc.reference, "isRead", true)
+            }
+            batch.commit().await()
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // ADMIN FUNCTIONS
+    // ----------------------------------------------------------------
+
+    fun getAllUsersFlow(): Flow<List<User>> = callbackFlow {
+        val listener = firestore.collection("users")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val users = (snapshot?.toObjects(User::class.java) ?: emptyList())
+                    .sortedByDescending { it.createdAt }
+                trySend(users)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun updateUserStatusByAdmin(uid: String, newStatus: String) {
+        firestore.collection("users").document(uid).update("status", newStatus).await()
+    }
+
+    suspend fun deleteUserByAdmin(uid: String) {
+        firestore.collection("users").document(uid).delete().await()
+    }
+
+    fun getAllJobsForAdminFlow(): Flow<List<Job>> = callbackFlow {
+        val listener = firestore.collection("jobs")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val jobs = (snapshot?.toObjects(Job::class.java) ?: emptyList())
+                    .filter { it.status != "removed" }
+                    .sortedByDescending { it.createdAt }
+                trySend(jobs)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun deleteAnyJobByAdmin(jobId: String) {
+        firestore.collection("jobs").document(jobId).update("status", "removed").await()
+    }
+
+    fun getPlatformMetricsFlow(): Flow<Triple<Int, Int, Int>> = callbackFlow {
+        var userCount = 0
+        var jobCount = 0
+        var appCount = 0
+
+        fun emitMetrics() {
+            trySend(Triple(userCount, jobCount, appCount))
+        }
+
+        val regUsers = firestore.collection("users").addSnapshotListener { s, _ ->
+            userCount = s?.size() ?: 0
+            emitMetrics()
+        }
+        val regJobs = firestore.collection("jobs").whereEqualTo("status", "open").addSnapshotListener { s, _ ->
+            jobCount = s?.size() ?: 0
+            emitMetrics()
+        }
+        val regApps = firestore.collection("applications").addSnapshotListener { s, _ ->
+            appCount = s?.size() ?: 0
+            emitMetrics()
+        }
+
+        awaitClose {
+            regUsers.remove()
+            regJobs.remove()
+            regApps.remove()
+        }
     }
 }

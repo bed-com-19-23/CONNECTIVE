@@ -4,12 +4,15 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,25 +25,43 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.connective.data.ConnectiveRepository
+import com.example.connective.data.Job
+import com.example.connective.data.User
 import com.example.connective.ui.theme.*
 
 @Composable
-fun PostJobScreen(onJobPosted: () -> Unit = {}) {
+fun PostJobScreen(
+    currentUser: User?,
+    employerJobs: List<Job> = emptyList(),
+    onPostJob: (
+        title: String,
+        company: String,
+        location: String,
+        type: String,
+        category: String,
+        salary: String,
+        minEducation: String,
+        minExperience: Int,
+        description: String
+    ) -> Unit,
+    onCloseJob: (String) -> Unit = {},
+    onDeleteJob: (String) -> Unit = {}
+) {
     val context = LocalContext.current
+
     var title by remember { mutableStateOf("") }
-    var company by remember { mutableStateOf(ConnectiveRepository.currentUser?.companyName ?: "") }
+    var company by remember { mutableStateOf(currentUser?.companyName ?: "") }
     var type by remember { mutableStateOf("Full-time") }
+    var category by remember { mutableStateOf("IT") }
     var location by remember { mutableStateOf("") }
     var salary by remember { mutableStateOf("") }
     var minEducation by remember { mutableStateOf("Bachelor's Degree") }
     var minExperience by remember { mutableIntStateOf(2) }
     var description by remember { mutableStateOf("") }
 
+    val categories = listOf("IT", "Finance", "Marketing", "Design", "Healthcare", "Education", "Engineering", "Other")
     val educationLevels = listOf("Master's Degree", "Bachelor's Degree", "Diploma", "Certificate", "Secondary School")
     val experienceOptions = listOf(0, 1, 2, 3, 5)
-
-    val activeJobs = ConnectiveRepository.jobs
 
     Column(
         Modifier
@@ -49,7 +70,7 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        // Centered Top Hover Bar Banner for Admin Job Control
+        // Centered Top Hover Bar Banner
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -88,14 +109,14 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Work,
-                                contentDescription = "Admin Job Control",
+                                contentDescription = "Employer Job Control",
                                 tint = Color.White,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            text = "Admin Job Control & Posting",
+                            text = "Employer Job Control",
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 20.sp,
                             color = Color.White,
@@ -104,7 +125,7 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Create, publish, and manage active job listings (${activeJobs.size} Active)",
+                        text = "Create and manage your job listings (${employerJobs.size} Active)",
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.9f),
                         textAlign = TextAlign.Center
@@ -126,6 +147,24 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
             Column(Modifier.padding(16.dp)) {
                 Field("Job Title", title, "e.g. Software Developer") { title = it }
                 Field("Company Name", company, "e.g. TechWave Ltd") { company = it }
+
+                Text("Job Category", fontWeight = FontWeight.Medium, color = TextDark, fontSize = 14.sp)
+                Spacer(Modifier.height(6.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(categories) { cat ->
+                        val selected = cat == category
+                        Box(
+                            Modifier
+                                .background(if (selected) BluePrimary else Color(0xFFE3EAFB), RoundedCornerShape(20.dp))
+                                .clickable { category = cat }
+                                .padding(horizontal = 14.dp, vertical = 7.dp)
+                        ) { Text(cat, color = if (selected) Color.White else BluePrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
 
                 Text("Job Type", fontWeight = FontWeight.Medium, color = TextDark, fontSize = 14.sp)
                 Spacer(Modifier.height(6.dp))
@@ -193,19 +232,11 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
                         if (title.isBlank() || location.isBlank()) {
                             Toast.makeText(context, "Please enter a title and location", Toast.LENGTH_SHORT).show()
                         } else {
-                            ConnectiveRepository.addJob(
-                                title = title,
-                                company = company,
-                                location = location,
-                                type = type,
-                                salary = salary,
-                                minEducation = minEducation,
-                                minExperienceYears = minExperience,
-                                description = description
+                            onPostJob(
+                                title, company, location, type, category, salary, minEducation, minExperience, description
                             )
                             title = ""; location = ""; salary = ""; description = ""; type = "Full-time"
                             Toast.makeText(context, "Job posted successfully!", Toast.LENGTH_SHORT).show()
-                            onJobPosted()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -216,18 +247,18 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
 
         Spacer(Modifier.height(20.dp))
 
-        // Manage Existing Jobs Section
-        Text("Manage Published Jobs", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextDark)
+        // Manage Employer's Jobs Section
+        Text("Your Published Jobs", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextDark)
         Spacer(Modifier.height(10.dp))
 
-        if (activeJobs.isEmpty()) {
+        if (employerJobs.isEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
                 Text(
-                    "No active job postings.",
+                    "You have not published any jobs yet.",
                     modifier = Modifier.padding(16.dp),
                     color = TextGray,
                     fontSize = 13.sp
@@ -235,7 +266,7 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
             }
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                activeJobs.forEach { job ->
+                employerJobs.forEach { job ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
@@ -250,19 +281,36 @@ fun PostJobScreen(onJobPosted: () -> Unit = {}) {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(job.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextDark)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(job.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextDark)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "[${job.status.uppercase()}]",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (job.status == "open") Color(0xFF2E9E5B) else Color.Red
+                                    )
+                                }
                                 Text("${job.company} • ${job.location}", fontSize = 12.sp, color = TextGray)
-                                Text("Min: ${job.minEducation} | ${job.minExperienceYears} yr(s)+", fontSize = 11.sp, color = BluePrimary)
+                                Text("Category: ${job.category} | Min: ${job.minEducation}", fontSize = 11.sp, color = BluePrimary)
                             }
-                            IconButton(onClick = {
-                                ConnectiveRepository.deleteJob(job.id)
-                                Toast.makeText(context, "Job posting removed", Toast.LENGTH_SHORT).show()
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete Job",
-                                    tint = Color.Red
-                                )
+                            Row {
+                                if (job.status == "open") {
+                                    IconButton(onClick = { onCloseJob(job.id) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = "Close Job",
+                                            tint = Color.Gray
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = { onDeleteJob(job.id) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete Job",
+                                        tint = Color.Red
+                                    )
+                                }
                             }
                         }
                     }
